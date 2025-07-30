@@ -5,11 +5,12 @@ import Data.Maybe
 import qualified OptParse as OP
 import System.Environment
 import Control.Search.AllValues
-import Text.CSV (readCSVFile)
+import Text.CSV (readCSVFile, writeCSVFile)
 
 data Options = Options {
       edgeFile :: String
     , connectionFile :: String
+    , outFile :: String
 } deriving Show
 
 cmdParser = OP.optParser $
@@ -23,12 +24,17 @@ cmdParser = OP.optParser $
         OP.<> OP.short "c"
         OP.<> OP.metavar "PATH"
         OP.<> OP.help "..."
+    ) OP.<.> OP.option (\s a -> a { outFile = s }) (
+        OP.long "outFile"
+        OP.<> OP.short "o"
+        OP.<> OP.metavar "PATH"
+        OP.<> OP.help "..."
     )
 
 applyParse :: [Options -> Options] -> Options
 applyParse fs = foldl (flip apply) defaultOpts fs
     where
-        defaultOpts = Options "" ""
+        defaultOpts = Options "" "" ""
 
 main :: IO ()
 main = do
@@ -40,6 +46,7 @@ main = do
         let options = applyParse v
         runCNN options
 
+-- reading data
 readEdges :: String -> IO [Edge]
 readEdges path = do
     header:rows <- readCSVFile path
@@ -48,7 +55,6 @@ readEdges path = do
         colCost = getCol "cost" header rows
     let edges = zipWith3 makeEdge colV1 colV2 colCost
     return edges
-
 readConnections :: String -> IO [Connection]
 readConnections path = do
     header:rows <- readCSVFile path
@@ -56,23 +62,46 @@ readConnections path = do
         colV2 = getCol "v2" header rows
     let connections = zipWith makeConnection colV1 colV2
     return connections
+getCol :: String -> [String] -> [[String]] -> [String]
+getCol colName header rows =
+    let colNum = getColNum colName header
+    in map (\row -> row !! colNum) rows
+    where
+        getColNum :: String -> [String] -> Int
+        getColNum colName header = fromJust $ findIndex (\x -> x == colName) header 
 
 runCNN :: Options -> IO ()
-runCNN (Options edgeFile connectionFile) = do
+runCNN (Options edgeFile connectionFile outFile) = do
+    -- prepare data
     edges <- readEdges edgeFile
     connections <- readConnections connectionFile
-    --map findForConnection 
-    --putStrLn $ show actions
     -- search
-    --bestPath <- findBestPath edges startVertex endVertex
-    --putStrLn $ show bestPath
     paths <- pathForConnections edges connections
-    putStrLn $ show paths
+    -- write results
+    let outCSV = prepOutCSV connections paths
+    writeCSVFile outFile outCSV
+    putStrLn "Done"
+
+prepOutCSV :: [Connection] -> [Maybe [Action]] -> [[String]]
+prepOutCSV connections paths =
+    let header = ["v1", "v2", "path"]
+        content = zipWith prepCSVRow connections paths
+    in header:content
+    where
+        prepCSVRow :: Connection -> Maybe [Action] -> [String]
+        prepCSVRow (Connection v1 v2) maybePath =
+            let connectionStrings = [show v1, show v2]
+                pathString = case maybePath of
+                    Nothing -> "NA"
+                    Just actions ->
+                        let vertices = actionsToPath actions
+                        in intercalate ";" $ map show vertices
+            in connectionStrings ++ [pathString]
 
 pathForConnections :: [Edge] -> [Connection] -> IO [Maybe [Action]]
 pathForConnections edges [] = return []
-pathForConnections edges (x:xs) = do
-    path <- pathForConnection edges x
+pathForConnections edges ((Connection v1 v2):xs) = do
+    path <- findBestPath edges v1 v2
     case path of
         Nothing -> do
             nextPaths <- pathForConnections edges xs
@@ -84,18 +113,10 @@ pathForConnections edges (x:xs) = do
             nextPaths <- pathForConnections remainingEdges xs
             return $ (Just actions):nextPaths
 
-pathForConnection :: [Edge] -> Connection -> IO (Maybe [Action])
-pathForConnection edges (Connection v1 v2) = findBestPath edges v1 v2
-
 findBestPath :: [Edge] -> Vertex -> Vertex -> IO (Maybe [Action])
 findBestPath edges start end =
     let actions = concat $ map edgeToActions edges
     in getOneValue $ head $ sortByCost $ generatePaths actions [] start end 0 []
-
-safeHead :: [a] -> Maybe a
-safeHead [] = Nothing
-safeHead [x] = Just x
-safeHead (x:xs) = Just x
 
 generatePaths :: [Action] -> [Vertex] ->  Vertex -> Vertex -> Int -> [Action] -> [[Action]]
 generatePaths allActions visited current end steps acc
@@ -116,12 +137,9 @@ generatePaths allActions visited current end steps acc
       isNotVisited :: Action -> Bool
       isNotVisited (Action _ v2 _) = not $ any (\v -> v2 == v) visited
 
-actionsToPath :: [Action] -> Path
+actionsToPath :: [Action] -> [Vertex]
 actionsToPath [] = []
-actionsToPath [x] = [getV1 x, getV2 x]
-actionsToPath (x:xs) = (getV1 x):(actionsToPath xs)
-
-type Path = [Vertex]
+actionsToPath (x:xs) = nub $ ([getV1 x, getV2 x] ++ (actionsToPath xs))
 
 data Connection = Connection Vertex Vertex
     deriving Show
@@ -159,13 +177,6 @@ sortByCost xss = sortBy (\xs ys -> sumCosts xs < sumCosts ys) xss
 
 type Vertex = Int
 
-getCol :: String -> [String] -> [[String]] -> [String]
-getCol colName header rows =
-    let colNum = getColNum colName header
-    in map (\row -> row !! colNum) rows
-    where
-        getColNum :: String -> [String] -> Int
-        getColNum colName header = fromJust $ findIndex (\x -> x == colName) header  
 
 
 
