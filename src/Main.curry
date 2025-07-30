@@ -56,27 +56,27 @@ runCNN (Options edgeFile startVertex endVertex) = do
         actions = concat $ map edgeToActions edges
     --putStrLn $ show actions
     -- search
-    maybeBestNPaths <- getOneValue $ take 1 $ sortByCost $ generatePaths actions startVertex startVertex endVertex 0 []
+    maybeBestNPaths <- getOneValue $ take 1 $ sortByCost $ generatePaths actions [] startVertex endVertex 0 []
     putStrLn $ show maybeBestNPaths
 
-generatePaths :: [Action] -> Vertex ->  Vertex -> Vertex -> Int -> [Action] -> [[Action]]
-generatePaths allActions previous current end steps acc
+generatePaths :: [Action] -> [Vertex] ->  Vertex -> Vertex -> Int -> [Action] -> [[Action]]
+generatePaths allActions visited current end steps acc
     | current == end = [reverse acc]
     | otherwise = do
         action <- validActions
         generatePaths
             allActions
-            current (getV2 action) end
+            (current:visited) (getV2 action) end
             (steps + 1)
             (action:acc)
   where
       -- pruning mechanism
       validActions :: [Action]
-      validActions = filter (\a -> isFromCurV a && isNotWhereWeComeFrom a) allActions
+      validActions = filter (\a -> isFromCurV a && isNotVisited a) allActions
       isFromCurV :: Action -> Bool
       isFromCurV (Action v1 _ _) = v1 == current
-      isNotWhereWeComeFrom :: Action -> Bool
-      isNotWhereWeComeFrom (Action _ v2 _) = v2 /= previous
+      isNotVisited :: Action -> Bool
+      isNotVisited (Action _ v2 _) = not $ any (\v -> v2 == v) visited
 
 data Edge = Edge Vertex Vertex Float -- v1 v2 cost
     deriving (Show, Eq)
