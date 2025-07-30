@@ -54,17 +54,42 @@ runCNN (Options edgeFile startVertex endVertex) = do
         colCost = getCol "cost" header rows
     let edges = zipWith3 makeEdge colV1 colV2 colCost
         --actions = concat $ map edgeToActions edges
-    --let endVertices = [3,7,5]
+        connections = [Connection 1 7, Connection 1 2, Connection 1 6]
+    --map findForConnection 
     --putStrLn $ show actions
     -- search
-    
-    bestPath <- findBestPath edges startVertex endVertex
-    putStrLn $ show bestPath
+    --bestPath <- findBestPath edges startVertex endVertex
+    --putStrLn $ show bestPath
+    paths <- pathForConnections edges connections
+    putStrLn $ show paths
+
+pathForConnections :: [Edge] -> [Connection] -> IO [Maybe [Action]]
+pathForConnections edges [] = return []
+pathForConnections edges (x:xs) = do
+    path <- pathForConnection edges x
+    case path of
+        Nothing -> do
+            nextPaths <- pathForConnections edges xs
+            return $ Nothing:nextPaths
+        Just actions  -> do
+            putStrLn $ show actions
+            let remainingEdges = filterEgdesByActions edges actions
+            putStrLn $ show remainingEdges
+            nextPaths <- pathForConnections remainingEdges xs
+            return $ (Just actions):nextPaths
+
+pathForConnection :: [Edge] -> Connection -> IO (Maybe [Action])
+pathForConnection edges (Connection v1 v2) = findBestPath edges v1 v2
 
 findBestPath :: [Edge] -> Vertex -> Vertex -> IO (Maybe [Action])
 findBestPath edges start end =
     let actions = concat $ map edgeToActions edges
     in getOneValue $ head $ sortByCost $ generatePaths actions [] start end 0 []
+
+safeHead :: [a] -> Maybe a
+safeHead [] = Nothing
+safeHead [x] = Just x
+safeHead (x:xs) = Just x
 
 generatePaths :: [Action] -> [Vertex] ->  Vertex -> Vertex -> Int -> [Action] -> [[Action]]
 generatePaths allActions visited current end steps acc
@@ -85,10 +110,27 @@ generatePaths allActions visited current end steps acc
       isNotVisited :: Action -> Bool
       isNotVisited (Action _ v2 _) = not $ any (\v -> v2 == v) visited
 
+actionsToPath :: [Action] -> Path
+actionsToPath [] = []
+actionsToPath [x] = [getV1 x, getV2 x]
+actionsToPath (x:xs) = (getV1 x):(actionsToPath xs)
+
+type Path = [Vertex]
+
+data Connection = Connection Vertex Vertex
+    deriving Show
+
 data Edge = Edge Vertex Vertex Float -- v1 v2 cost
     deriving (Show, Eq)
 makeEdge :: String -> String -> String -> Edge
 makeEdge v1 v2 cost = Edge (read v1) (read v2) (read cost)
+
+filterEgdesByActions :: [Edge] -> [Action] -> [Edge]
+filterEgdesByActions edges actions = filter (\e -> not $ isEdgeUsedByAnyAction e actions) edges
+isEdgeUsedByAnyAction :: Edge -> [Action] -> Bool
+isEdgeUsedByAnyAction edge actions = any (isEdgeUsedByAction edge) actions
+isEdgeUsedByAction :: Edge -> Action -> Bool
+isEdgeUsedByAction (Edge ev1 ev2 _) (Action av1 av2 _) = (ev1 == av1 && ev2 == av2) || (ev1 == av2 && ev2 == av1)
 
 data Action = Action Vertex Vertex Float -- v1 v2 cost
     deriving (Show, Eq)
