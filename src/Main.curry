@@ -53,11 +53,18 @@ runCNN (Options edgeFile startVertex endVertex) = do
         colV2 = getCol "v2" header rows
         colCost = getCol "cost" header rows
     let edges = zipWith3 makeEdge colV1 colV2 colCost
-        actions = concat $ map edgeToActions edges
+        --actions = concat $ map edgeToActions edges
+    --let endVertices = [3,7,5]
     --putStrLn $ show actions
     -- search
-    maybeBestNPaths <- getOneValue $ take 1 $ sortByCost $ generatePaths actions [] startVertex endVertex 0 []
-    putStrLn $ show maybeBestNPaths
+    
+    bestPath <- findBestPath edges startVertex endVertex
+    putStrLn $ show bestPath
+
+findBestPath :: [Edge] -> Vertex -> Vertex -> IO (Maybe [Action])
+findBestPath edges start end =
+    let actions = concat $ map edgeToActions edges
+    in getOneValue $ head $ sortByCost $ generatePaths actions [] start end 0 []
 
 generatePaths :: [Action] -> [Vertex] ->  Vertex -> Vertex -> Int -> [Action] -> [[Action]]
 generatePaths allActions visited current end steps acc
