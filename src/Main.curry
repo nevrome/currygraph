@@ -9,8 +9,7 @@ import Text.CSV (readCSVFile)
 
 data Options = Options {
       edgeFile :: String
-    , startVertex :: Int
-    , endVertex :: Int
+    , connectionFile :: String
 } deriving Show
 
 cmdParser = OP.optParser $
@@ -19,22 +18,17 @@ cmdParser = OP.optParser $
         OP.<> OP.short "e"
         OP.<> OP.metavar "PATH"
         OP.<> OP.help "..."
-    ) OP.<.> OP.option (\s a -> a { startVertex = read s }) (
-        OP.long "startVertex"
-        OP.<> OP.short "a"
-        OP.<> OP.metavar "INT"
-        OP.<> OP.help "..."
-    ) OP.<.> OP.option (\s a -> a { endVertex = read s }) (
-        OP.long "endVertex"
-        OP.<> OP.short "b"
-        OP.<> OP.metavar "INT"
+    ) OP.<.> OP.option (\s a -> a { connectionFile = s }) (
+        OP.long "connectionFile"
+        OP.<> OP.short "c"
+        OP.<> OP.metavar "PATH"
         OP.<> OP.help "..."
     )
 
 applyParse :: [Options -> Options] -> Options
 applyParse fs = foldl (flip apply) defaultOpts fs
     where
-        defaultOpts = Options "" 0 0
+        defaultOpts = Options "" ""
 
 main :: IO ()
 main = do
@@ -46,15 +40,27 @@ main = do
         let options = applyParse v
         runCNN options
 
-runCNN :: Options -> IO ()
-runCNN (Options edgeFile startVertex endVertex) = do
-    header:rows <- readCSVFile edgeFile
+readEdges :: String -> IO [Edge]
+readEdges path = do
+    header:rows <- readCSVFile path
     let colV1 = getCol "v1" header rows
         colV2 = getCol "v2" header rows
         colCost = getCol "cost" header rows
     let edges = zipWith3 makeEdge colV1 colV2 colCost
-        --actions = concat $ map edgeToActions edges
-        connections = [Connection 1 7, Connection 1 2, Connection 1 6]
+    return edges
+
+readConnections :: String -> IO [Connection]
+readConnections path = do
+    header:rows <- readCSVFile path
+    let colV1 = getCol "v1" header rows
+        colV2 = getCol "v2" header rows
+    let connections = zipWith makeConnection colV1 colV2
+    return connections
+
+runCNN :: Options -> IO ()
+runCNN (Options edgeFile connectionFile) = do
+    edges <- readEdges edgeFile
+    connections <- readConnections connectionFile
     --map findForConnection 
     --putStrLn $ show actions
     -- search
@@ -72,9 +78,9 @@ pathForConnections edges (x:xs) = do
             nextPaths <- pathForConnections edges xs
             return $ Nothing:nextPaths
         Just actions  -> do
-            putStrLn $ show actions
+            --putStrLn $ show actions
             let remainingEdges = filterEgdesByActions edges actions
-            putStrLn $ show remainingEdges
+            --putStrLn $ show remainingEdges
             nextPaths <- pathForConnections remainingEdges xs
             return $ (Just actions):nextPaths
 
@@ -119,6 +125,8 @@ type Path = [Vertex]
 
 data Connection = Connection Vertex Vertex
     deriving Show
+makeConnection :: String -> String -> Connection
+makeConnection v1 v2 = Connection (read v1) (read v2)
 
 data Edge = Edge Vertex Vertex Float -- v1 v2 cost
     deriving (Show, Eq)
