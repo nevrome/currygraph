@@ -131,11 +131,13 @@ generatePaths allActions visited current end steps acc
   where
       -- pruning mechanism
       validActions :: [Action]
-      validActions = filter (\a -> isFromCurV a && isNotVisited a) allActions
+      validActions = filter (\a -> isNotTooManySteps && isFromCurV a && isNotVisited a) allActions
       isFromCurV :: Action -> Bool
       isFromCurV (Action v1 _ _) = v1 == current
       isNotVisited :: Action -> Bool
       isNotVisited (Action _ v2 _) = not $ any (\v -> v2 == v) visited
+      isNotTooManySteps :: Bool
+      isNotTooManySteps = steps < 6
 
 actionsToPath :: [Action] -> [Vertex]
 actionsToPath [] = []
