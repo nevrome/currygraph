@@ -150,11 +150,14 @@ minCostDiscovered :: GlobalT Float
 minCostDiscovered = globalT "Main.minCostDiscovered" 10000
 stopSearch :: GlobalT Bool
 stopSearch = globalT "Main.stopSearch" False
+branchesExplored :: GlobalT Int
+branchesExplored = globalT "Main.branchesExplored" 0
 
 findBestPath :: [Edge] -> Vertex -> Vertex -> Float -> IO (Maybe [Action])
 findBestPath edges start end sumCost = do
     writeGlobalT minCostDiscovered (sumCost*1.5)
     writeGlobalT stopSearch False
+    writeGlobalT branchesExplored 0
     let actions = concat $ map edgeToActions edges
     case isEndStillReachable end actions of
         False -> return Nothing
@@ -184,30 +187,35 @@ generatePaths allActions visited current end steps cost acc
   where
       -- pruning mechanism
       validActions :: [Action]
-      validActions = take 3 $ sortBySpatialDistToDest end $ filter checkAction allActions
+      validActions = sortBySpatialDistToDest end $ filter checkAction allActions
       checkAction :: Action -> Bool
       checkAction a =
-          --isNotTooManySteps &&
           (not isStopSearch)
           && isFromCurV a
           && isNotVisited a
           && isCostAboveMinCostDiscovered a
+          && isBelowBranchLimit
       isStopSearch :: Bool
       isStopSearch = unsafePerformIO $! readGlobalT stopSearch
       isFromCurV :: Action -> Bool
       isFromCurV (Action v1 _ _) = v1 == current
       isNotVisited :: Action -> Bool
       isNotVisited (Action _ v2 _) = not $ any (\v -> v2 == v) visited
-      isNotTooManySteps :: Bool
-      isNotTooManySteps = steps < 6
       isCostAboveMinCostDiscovered :: Action -> Bool
       isCostAboveMinCostDiscovered (Action _ _ c) =
           let previousMinCost = unsafePerformIO $! readGlobalT minCostDiscovered
           in (cost + c) < previousMinCost
+      isBelowBranchLimit :: Bool
+      isBelowBranchLimit =
+          let nrBranchesExplored = unsafePerformIO $! readGlobalT branchesExplored
+              update = unsafePerformIO $ do
+                  writeGlobalT branchesExplored (nrBranchesExplored + 1)
+                  return()
+          in update `seq` nrBranchesExplored < 1000
 
 actionsToPath :: [Action] -> [Vertex]
 actionsToPath [] = []
-actionsToPath (x:xs) = nub $ ([getV1 x, getV2 x] ++ (actionsToPath xs))
+actionsToPath (x:xs) = nub ([getV1 x, getV2 x] ++ (actionsToPath xs))
 
 data Edge = Edge Vertex Vertex Float -- v1 v2 cost
     deriving (Show, Eq)
