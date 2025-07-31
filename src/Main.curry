@@ -10,13 +10,19 @@ import Data.Global
 import System.IO.Unsafe
 
 data Options = Options {
-      edgeFile :: String
+      vertFile :: String
+    , edgeFile :: String
     , connectionFile :: String
     , outFile :: String
 } deriving Show
 
 cmdParser = OP.optParser $
-    OP.option (\s a -> a { edgeFile = s }) (
+    OP.option (\s a -> a { vertFile = s }) (
+        OP.long "vertFile"
+        OP.<> OP.short "v"
+        OP.<> OP.metavar "PATH"
+        OP.<> OP.help "..."
+    ) OP.<.> OP.option (\s a -> a { edgeFile = s }) (
         OP.long "edgeFile"
         OP.<> OP.short "e"
         OP.<> OP.metavar "PATH"
@@ -36,7 +42,7 @@ cmdParser = OP.optParser $
 applyParse :: [Options -> Options] -> Options
 applyParse fs = foldl (flip apply) defaultOpts fs
     where
-        defaultOpts = Options "" "" ""
+        defaultOpts = Options "" "" "" ""
 
 main :: IO ()
 main = do
@@ -49,21 +55,36 @@ main = do
         runCNN options
 
 -- reading data
-readEdges :: String -> IO [Edge]
-readEdges path = do
+readVertices :: String -> IO [Vertex]
+readVertices path = do
+    header:rows <- readCSVFile path
+    let colID = getCol "id" header rows
+        colLong = getCol "long" header rows
+        colLat = getCol "lat" header rows
+    let vertices = zipWith3 makeVertex colID colLong colLat
+    return vertices
+
+readEdges :: String -> [Vertex] -> IO [Edge]
+readEdges path vertices = do
     header:rows <- readCSVFile path
     let colV1 = getCol "v1" header rows
+        verticesV1 = map (findVertexByID vertices . read) colV1
         colV2 = getCol "v2" header rows
+        verticesV2 = map (findVertexByID vertices . read) colV2
         colCost = getCol "cost" header rows
-    let edges = zipWith3 makeEdge colV1 colV2 colCost
+    let edges = zipWith3 makeEdge verticesV1 verticesV2 colCost
     return edges
-readConnections :: String -> IO [Connection]
-readConnections path = do
+    
+readConnections :: String -> [Vertex] -> IO [Connection]
+readConnections path vertices = do
     header:rows <- readCSVFile path
     let colV1 = getCol "v1" header rows
+        verticesV1 = map (findVertexByID vertices . read) colV1
         colV2 = getCol "v2" header rows
-    let connections = zipWith makeConnection colV1 colV2
+        verticesV2 = map (findVertexByID vertices . read) colV2
+    let connections = zipWith makeConnection verticesV1 verticesV2
     return connections
+
 getCol :: String -> [String] -> [[String]] -> [String]
 getCol colName header rows =
     let colNum = getColNum colName header
@@ -73,13 +94,14 @@ getCol colName header rows =
         getColNum colName header = fromJust $ findIndex (\x -> x == colName) header 
 
 runCNN :: Options -> IO ()
-runCNN (Options edgeFile connectionFile outFile) = do
-    -- prepare data
-    edges <- readEdges edgeFile
-    connections <- readConnections connectionFile
-    -- search
+runCNN (Options vertFile edgeFile connectionFile outFile) = do
+    putStrLn "Reading data..."
+    vertices <- readVertices vertFile
+    edges <- readEdges edgeFile vertices
+    connections <- readConnections connectionFile vertices
+    putStrLn "Searching paths..."
     paths <- pathForConnections edges connections
-    -- write results
+    putStrLn "Writing output..."
     let outCSV = prepOutCSV connections paths
     writeCSVFile outFile outCSV
     putStrLn "Done"
@@ -144,7 +166,7 @@ generatePaths allActions visited current end steps cost acc
   where
       -- pruning mechanism
       validActions :: [Action]
-      validActions = filter checkAction allActions
+      validActions = sortBySpatialDistToDest end $ filter checkAction allActions
       checkAction :: Action -> Bool
       checkAction a =
           isNotTooManySteps &&
@@ -166,15 +188,10 @@ actionsToPath :: [Action] -> [Vertex]
 actionsToPath [] = []
 actionsToPath (x:xs) = nub $ ([getV1 x, getV2 x] ++ (actionsToPath xs))
 
-data Connection = Connection Vertex Vertex
-    deriving Show
-makeConnection :: String -> String -> Connection
-makeConnection v1 v2 = Connection (read v1) (read v2)
-
 data Edge = Edge Vertex Vertex Float -- v1 v2 cost
     deriving (Show, Eq)
-makeEdge :: String -> String -> String -> Edge
-makeEdge v1 v2 cost = Edge (read v1) (read v2) (read cost)
+makeEdge :: Vertex -> Vertex -> String -> Edge
+makeEdge v1 v2 cost = Edge v1 v2 (read cost)
 
 filterEgdesByActions :: [Edge] -> [Action] -> [Edge]
 filterEgdesByActions edges actions = filter (\e -> not $ isEdgeUsedByAnyAction e actions) edges
@@ -200,15 +217,38 @@ minByCost xss = minimumBy (\xs ys -> compare (sumCosts xs) (sumCosts ys)) xss
 sortByCost :: [[Action]] -> [[Action]]
 sortByCost xss = sortBy (\xs ys -> sumCosts xs < sumCosts ys) xss
 
-type Vertex = Int
+sortBySpatialDistToDest :: Vertex -> [Action] -> [Action]
+sortBySpatialDistToDest dest xs = sortBy (\x y -> distToDest dest x < distToDest dest y) xs
+distToDest :: Vertex -> Action -> Float
+distToDest dest (Action _ v2 _) = distHaversine dest v2
 
+data Connection = Connection Vertex Vertex
+    deriving Show
+makeConnection :: Vertex -> Vertex -> Connection
+makeConnection v1 v2 = Connection v1 v2
 
+data Vertex = Vertex Int Float Float -- v long lat
+instance Show Vertex where
+    show (Vertex v _ _) = show v
+instance Eq Vertex where
+    (Vertex v1 _ _) == (Vertex v2 _ _) = v1 == v2
+makeVertex :: String -> String -> String -> Vertex
+makeVertex v long lat = Vertex (read v) (read long) (read lat)
+findVertexByID :: [Vertex] -> Int -> Vertex
+findVertexByID xs voi = fromJust $ find (\(Vertex id _ _) -> id == voi) xs
 
-
-
-
-
-
+distHaversine :: Vertex -> Vertex -> Float
+distHaversine (Vertex _ long1 lat1) (Vertex _ long2 lat2) =
+    sqrt ((long1 - long2)^2 + (lat1 - lat2)^2)
+    --let r = 6371000  -- radius of Earth in metres
+    --    toRadians n = n * pi / 180
+    --    square x = x * x
+    --    cosr = cos . toRadians
+    --    dlat = toRadians (lat1 - lat2) / 2
+    --    dlong = toRadians (long1 - long2) / 2
+    --    a = square (sin dlat) + cosr lat1 * cosr lat2 * square (sin dlong)
+    --    c = 2 * atan2 (sqrt a) (sqrt (1 - a))
+    --in r * c
 
 
 
