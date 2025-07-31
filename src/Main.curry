@@ -6,6 +6,8 @@ import qualified OptParse as OP
 import System.Environment
 import Control.Search.AllValues
 import Text.CSV (readCSVFile, writeCSVFile)
+import Data.Global
+import System.IO.Unsafe
 
 data Options = Options {
       edgeFile :: String
@@ -113,31 +115,52 @@ pathForConnections edges ((Connection v1 v2):xs) = do
             nextPaths <- pathForConnections remainingEdges xs
             return $ (Just actions):nextPaths
 
-findBestPath :: [Edge] -> Vertex -> Vertex -> IO (Maybe [Action])
-findBestPath edges start end =
-    let actions = concat $ map edgeToActions edges
-    in getOneValue $ head $ sortByCost $ generatePaths actions [] start end 0 []
+-- global mutable variable to keep track of the cheapest path already discovered
+minCostDiscovered :: GlobalT Float
+minCostDiscovered = globalT "Main.minCostDiscovered" 10000
 
-generatePaths :: [Action] -> [Vertex] ->  Vertex -> Vertex -> Int -> [Action] -> [[Action]]
-generatePaths allActions visited current end steps acc
-    | current == end = [reverse acc]
+findBestPath :: [Edge] -> Vertex -> Vertex -> IO (Maybe [Action])
+findBestPath edges start end = do
+    writeGlobalT minCostDiscovered 10000
+    let actions = concat $ map edgeToActions edges
+    maybeBestPath <- getOneValue $ head $ sortByCost $ generatePaths actions [] start end 0 0 []
+    return maybeBestPath
+
+generatePaths :: [Action] -> [Vertex] ->  Vertex -> Vertex -> Int -> Float -> [Action] -> [[Action]]
+generatePaths allActions visited current end steps cost acc
+    | current == end =
+        let update = unsafePerformIO $ do
+                writeGlobalT minCostDiscovered cost
+                return ()
+        in update `seq` [reverse acc]
     | otherwise = do
         action <- validActions
         generatePaths
             allActions
             (current:visited) (getV2 action) end
             (steps + 1)
+            (cost + getCost action)
             (action:acc)
   where
       -- pruning mechanism
       validActions :: [Action]
-      validActions = filter (\a -> isNotTooManySteps && isFromCurV a && isNotVisited a) allActions
+      validActions = filter checkAction allActions
+      checkAction :: Action -> Bool
+      checkAction a =
+          isNotTooManySteps &&
+          isFromCurV a
+          && isNotVisited a
+          && isCostAboveMinCostDiscovered a
       isFromCurV :: Action -> Bool
       isFromCurV (Action v1 _ _) = v1 == current
       isNotVisited :: Action -> Bool
       isNotVisited (Action _ v2 _) = not $ any (\v -> v2 == v) visited
       isNotTooManySteps :: Bool
       isNotTooManySteps = steps < 6
+      isCostAboveMinCostDiscovered :: Action -> Bool
+      isCostAboveMinCostDiscovered (Action _ _ c) =
+          let previousMinCost = unsafePerformIO $! readGlobalT minCostDiscovered
+          in previousMinCost > (cost + c)
 
 actionsToPath :: [Action] -> [Vertex]
 actionsToPath [] = []
