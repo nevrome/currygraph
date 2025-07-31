@@ -83,7 +83,8 @@ readConnections path vertices = do
         verticesV1 = map (findVertexByID vertices . read) colV1
         colV2 = getCol "v2" header rows
         verticesV2 = map (findVertexByID vertices . read) colV2
-    let connections = zipWith makeConnection verticesV1 verticesV2
+        colCost = getCol "sum_cost" header rows
+    let connections = zipWith3 makeConnection verticesV1 verticesV2 colCost
     return connections
 
 getCol :: String -> [String] -> [[String]] -> [String]
@@ -112,13 +113,13 @@ runCNN (Options vertFile edgeFile connectionFile outFile) = do
 
 prepOutCSV :: [Connection] -> [Maybe [Action]] -> [[String]]
 prepOutCSV connections paths =
-    let header = ["v1", "v2", "path"]
+    let header = ["v1", "v2", "initial_sum_cost", "path"]
         content = zipWith prepCSVRow connections paths
     in header:content
     where
         prepCSVRow :: Connection -> Maybe [Action] -> [String]
-        prepCSVRow (Connection v1 v2) maybePath =
-            let connectionStrings = [show v1, show v2]
+        prepCSVRow (Connection v1 v2 sumCost) maybePath =
+            let connectionStrings = [show v1, show v2, show sumCost]
                 pathString = case maybePath of
                     Nothing -> "NA"
                     Just actions ->
@@ -128,11 +129,11 @@ prepOutCSV connections paths =
 
 pathForConnections :: [Edge] -> [Connection] -> Int -> IO [Maybe [Action]]
 pathForConnections edges [] _ = return []
-pathForConnections edges ((Connection v1 v2):xs) step = do
+pathForConnections edges ((Connection v1 v2 sumCost):xs) step = do
     putStr (show step ++ ".")
     hFlush stdout -- write our immediatelly
     -- start computation
-    path <- findBestPath edges v1 v2
+    path <- findBestPath edges v1 v2 sumCost
     case path of
         Nothing -> do
             nextPaths <- pathForConnections edges xs (step+1)
@@ -148,9 +149,9 @@ pathForConnections edges ((Connection v1 v2):xs) step = do
 minCostDiscovered :: GlobalT Float
 minCostDiscovered = globalT "Main.minCostDiscovered" 10000
 
-findBestPath :: [Edge] -> Vertex -> Vertex -> IO (Maybe [Action])
-findBestPath edges start end = do
-    writeGlobalT minCostDiscovered 10000
+findBestPath :: [Edge] -> Vertex -> Vertex -> Float -> IO (Maybe [Action])
+findBestPath edges start end sumCost = do
+    writeGlobalT minCostDiscovered (sumCost*3)
     let actions = concat $ map edgeToActions edges
     maybeBestPath <- getOneValue $ head $ sortByCost $ generatePaths actions [] start end 0 0 []
     return maybeBestPath
@@ -229,10 +230,10 @@ sortBySpatialDistToDest dest xs = sortBy (\x y -> distToDest dest x < distToDest
 distToDest :: Vertex -> Action -> Float
 distToDest dest (Action _ v2 _) = distHaversine dest v2
 
-data Connection = Connection Vertex Vertex
+data Connection = Connection Vertex Vertex Float -- v1 v2 sum_cost
     deriving Show
-makeConnection :: Vertex -> Vertex -> Connection
-makeConnection v1 v2 = Connection v1 v2
+makeConnection :: Vertex -> Vertex -> String -> Connection
+makeConnection v1 v2 sumCost = Connection v1 v2 (read sumCost)
 
 data Vertex = Vertex Int Float Float -- v long lat
 instance Show Vertex where
