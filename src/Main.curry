@@ -7,6 +7,7 @@ import System.Environment
 import Control.Search.AllValues
 import Text.CSV (readCSVFile, writeCSVFile)
 import Data.Global
+import System.IO
 import System.IO.Unsafe
 
 data Options = Options {
@@ -103,7 +104,7 @@ runCNN (Options vertFile edgeFile connectionFile outFile) = do
     connections <- readConnections connectionFile vertices
     putStrLn $ "Connections: " ++ show (length connections)
     putStrLn "Searching paths..."
-    paths <- pathForConnections edges connections
+    paths <- pathForConnections edges connections 0
     putStrLn "Writing output..."
     let outCSV = prepOutCSV connections paths
     writeCSVFile outFile outCSV
@@ -125,19 +126,22 @@ prepOutCSV connections paths =
                         in intercalate ";" $ map show vertices
             in connectionStrings ++ [pathString]
 
-pathForConnections :: [Edge] -> [Connection] -> IO [Maybe [Action]]
-pathForConnections edges [] = return []
-pathForConnections edges ((Connection v1 v2):xs) = do
+pathForConnections :: [Edge] -> [Connection] -> Int -> IO [Maybe [Action]]
+pathForConnections edges [] _ = return []
+pathForConnections edges ((Connection v1 v2):xs) step = do
+    putStr (show step ++ ".")
+    hFlush stdout -- write our immediatelly
+    -- start computation
     path <- findBestPath edges v1 v2
     case path of
         Nothing -> do
-            nextPaths <- pathForConnections edges xs
+            nextPaths <- pathForConnections edges xs (step+1)
             return $ Nothing:nextPaths
         Just actions  -> do
             --putStrLn $ show actions
             let remainingEdges = filterEgdesByActions edges actions
             --putStrLn $ show remainingEdges
-            nextPaths <- pathForConnections remainingEdges xs
+            nextPaths <- pathForConnections remainingEdges xs (step+1)
             return $ (Just actions):nextPaths
 
 -- global mutable variable to keep track of the cheapest path already discovered
