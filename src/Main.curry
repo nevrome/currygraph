@@ -148,15 +148,15 @@ pathForConnections edges ((Connection v1 v2 sumCost):xs) step = do
 -- global mutable variable to keep track of the cheapest path already discovered
 minCostDiscovered :: GlobalT Float
 minCostDiscovered = globalT "Main.minCostDiscovered" 10000
-stopSearch :: GlobalT Bool
-stopSearch = globalT "Main.stopSearch" False
+--stopSearch :: GlobalT Bool
+--stopSearch = globalT "Main.stopSearch" False
 branchesExplored :: GlobalT Int
 branchesExplored = globalT "Main.branchesExplored" 0
 
 findBestPath :: [Edge] -> Vertex -> Vertex -> Float -> IO (Maybe [Action])
 findBestPath edges start end sumCost = do
     writeGlobalT minCostDiscovered (sumCost*1.5)
-    writeGlobalT stopSearch False
+    --writeGlobalT stopSearch False
     writeGlobalT branchesExplored 0
     let actions = concat $ map edgeToActions edges
     case isEndStillReachable end actions of
@@ -173,7 +173,7 @@ generatePaths allActions visited current end steps cost acc
     | current == end =
         let update = unsafePerformIO $ do
                 writeGlobalT minCostDiscovered cost
-                writeGlobalT stopSearch True
+                --writeGlobalT stopSearch True
                 return ()
         in update `seq` [reverse acc]
     | otherwise = do
@@ -190,13 +190,13 @@ generatePaths allActions visited current end steps cost acc
       validActions = sortBySpatialDistToDest end $ filter checkAction allActions
       checkAction :: Action -> Bool
       checkAction a =
-          (not isStopSearch)
-          && isFromCurV a
-          && isNotVisited a
-          && isCostAboveMinCostDiscovered a
-          && isBelowBranchLimit
-      isStopSearch :: Bool
-      isStopSearch = unsafePerformIO $! readGlobalT stopSearch
+          --(not isStopSearch) &&
+          isFromCurV a &&
+          isNotVisited a &&
+          isCostAboveMinCostDiscovered a &&
+          isBelowBranchLimit
+      --isStopSearch :: Bool
+      --isStopSearch = unsafePerformIO $! readGlobalT stopSearch
       isFromCurV :: Action -> Bool
       isFromCurV (Action v1 _ _) = v1 == current
       isNotVisited :: Action -> Bool
