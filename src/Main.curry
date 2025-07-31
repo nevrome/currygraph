@@ -151,10 +151,16 @@ minCostDiscovered = globalT "Main.minCostDiscovered" 10000
 
 findBestPath :: [Edge] -> Vertex -> Vertex -> Float -> IO (Maybe [Action])
 findBestPath edges start end sumCost = do
-    writeGlobalT minCostDiscovered (sumCost*3)
+    writeGlobalT minCostDiscovered (sumCost*2)
     let actions = concat $ map edgeToActions edges
-    maybeBestPath <- getOneValue $ head $ sortByCost $ generatePaths actions [] start end 0 0 []
-    return maybeBestPath
+    case isEndStillReachable end actions of
+        False -> return Nothing
+        True -> do
+            maybeBestPath <- getOneValue $ head $ sortByCost $ generatePaths actions [] start end 0 0 []
+            return maybeBestPath
+    where
+        isEndStillReachable :: Vertex -> [Action] -> Bool
+        isEndStillReachable (Vertex v _ _) actions = any (\(Action _ (Vertex v2 _ _) _) -> v == v2) actions
 
 generatePaths :: [Action] -> [Vertex] ->  Vertex -> Vertex -> Int -> Float -> [Action] -> [[Action]]
 generatePaths allActions visited current end steps cost acc
