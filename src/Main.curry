@@ -97,8 +97,11 @@ runCNN :: Options -> IO ()
 runCNN (Options vertFile edgeFile connectionFile outFile) = do
     putStrLn "Reading data..."
     vertices <- readVertices vertFile
+    putStrLn $ "Vertices: " ++ show (length vertices)
     edges <- readEdges edgeFile vertices
+    putStrLn $ "Edges: " ++ show (length edges)
     connections <- readConnections connectionFile vertices
+    putStrLn $ "Connections: " ++ show (length connections)
     putStrLn "Searching paths..."
     paths <- pathForConnections edges connections
     putStrLn "Writing output..."
@@ -169,7 +172,7 @@ generatePaths allActions visited current end steps cost acc
       validActions = sortBySpatialDistToDest end $ filter checkAction allActions
       checkAction :: Action -> Bool
       checkAction a =
-          isNotTooManySteps &&
+          --isNotTooManySteps &&
           isFromCurV a
           && isNotVisited a
           && isCostAboveMinCostDiscovered a
@@ -182,7 +185,7 @@ generatePaths allActions visited current end steps cost acc
       isCostAboveMinCostDiscovered :: Action -> Bool
       isCostAboveMinCostDiscovered (Action _ _ c) =
           let previousMinCost = unsafePerformIO $! readGlobalT minCostDiscovered
-          in previousMinCost > (cost + c)
+          in (cost + c) < previousMinCost
 
 actionsToPath :: [Action] -> [Vertex]
 actionsToPath [] = []
