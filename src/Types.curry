@@ -62,8 +62,8 @@ instance Ord Vertex where
   compare (Vertex v1 _ _ _) (Vertex v2 _ _ _) = compare v1 v2
 makeVertex :: String -> String -> String -> String -> Vertex
 makeVertex v long lat focal = Vertex (read v) (read long) (read lat) (read focal)
-findVertexByID :: [Vertex] -> Int -> Vertex
-findVertexByID xs voi = fromJust $ find (\(Vertex id _ _ _) -> id == voi) xs
+findVertexUnsafe :: M.Map Int Vertex -> Int -> Vertex
+findVertexUnsafe m voi = fromJust $ M.lookup voi m
 
 distHaversine :: Vertex -> Vertex -> Float
 distHaversine (Vertex _ long1 lat1 _) (Vertex _ long2 lat2 _) =

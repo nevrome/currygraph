@@ -8,6 +8,7 @@ import System.IO
 import System.IO.Unsafe
 import Control.Search.AllValues
 import Data.List
+import qualified Data.Map as M
 
 data LCPOptions = LCPOptions {
       lcpVertFile :: String
@@ -20,10 +21,11 @@ runLCP :: LCPOptions -> IO ()
 runLCP (LCPOptions vertFile edgeFile connectionFile outFile) = do
     putStrLn "Reading data..."
     vertices <- readVertices vertFile
+    let verticesMap = M.fromList $ map (\v@(Vertex v1 _ _ _) -> (v1,v)) vertices
     putStrLn $ "Vertices: " ++ show (length vertices)
-    edges <- readEdges edgeFile vertices
+    edges <- readEdges edgeFile verticesMap
     putStrLn $ "Edges: " ++ show (length edges)
-    connections <- readConnections connectionFile vertices
+    connections <- readConnections connectionFile verticesMap
     putStrLn $ "Connections: " ++ show (length connections)
     putStrLn "Searching..."
     h <- openFile outFile WriteMode
