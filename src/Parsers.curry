@@ -4,31 +4,7 @@ import Types
 
 import Data.Maybe
 import Data.List
-import Text.CSV (readCSVFile, writeCSVFile)
-
-writePaths :: String -> [Connection] -> [Maybe [Action]] -> IO ()
-writePaths outFile connections paths = do
-    writeCSVFile outFile (prepOutCSV connections paths)
-
-prepOutCSV :: [Connection] -> [Maybe [Action]] -> [[String]]
-prepOutCSV connections paths =
-    let header = ["v1", "v2", "initial_sum_cost", "path"]
-        content = zipWith prepCSVRow connections paths
-    in header:content
-    where
-        prepCSVRow :: Connection -> Maybe [Action] -> [String]
-        prepCSVRow (Connection v1 v2 sumCost) maybePath =
-            let connectionStrings = [show v1, show v2, show sumCost]
-                pathString = case maybePath of
-                    Nothing -> "NA"
-                    Just actions ->
-                        let vertices = actionsToPath actions
-                        in intercalate ";" $ map show vertices
-            in connectionStrings ++ [pathString]
-
-actionsToPath :: [Action] -> [Vertex]
-actionsToPath [] = []
-actionsToPath (x:xs) = nub ([getV1 x, getV2 x] ++ (actionsToPath xs))
+import Text.CSV (readCSVFile)
 
 -- reading data
 readVertices :: String -> IO [Vertex]

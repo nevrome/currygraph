@@ -7,6 +7,7 @@ import Data.Global
 import System.IO
 import System.IO.Unsafe
 import Control.Search.AllValues
+import Data.List
 
 data LCPOptions = LCPOptions {
       lcpVertFile :: String
@@ -24,29 +25,37 @@ runLCP (LCPOptions vertFile edgeFile connectionFile outFile) = do
     putStrLn $ "Edges: " ++ show (length edges)
     connections <- readConnections connectionFile vertices
     putStrLn $ "Connections: " ++ show (length connections)
-    putStrLn "Searching paths..."
-    paths <- pathForConnections edges connections 0
-    putStrLn "Writing output..."
-    writePaths outFile connections paths
+    putStrLn "Searching..."
+    h <- openFile outFile WriteMode
+    hPutStrLn h "v1,v2,initial_sum_cost,path" -- csv header
+    pathForConnections h edges connections
+    hFlush h
+    hClose h
     putStrLn "Done"
 
-pathForConnections :: [Edge] -> [Connection] -> Int -> IO [Maybe [Action]]
-pathForConnections edges [] _ = return []
-pathForConnections edges ((Connection v1 v2 sumCost):xs) step = do
-    putStr (show step ++ ".")
-    hFlush stdout -- write our immediatelly
-    -- start computation
+pathForConnections :: Handle -> [Edge] -> [Connection] -> IO ()
+pathForConnections _ _ [] = return ()
+pathForConnections h edges (con@(Connection v1 v2 sumCost):xs) = do
     path <- findBestPath edges v1 v2 sumCost
-    case path of
-        Nothing -> do
-            nextPaths <- pathForConnections edges xs (step+1)
-            return $ Nothing:nextPaths
-        Just actions  -> do
-            --putStrLn $ show actions
-            let remainingEdges = filterEgdesByActions edges actions
-            --putStrLn $ show remainingEdges
-            nextPaths <- pathForConnections remainingEdges xs (step+1)
-            return $ (Just actions):nextPaths
+    writeConnectionResult h con path
+    let remainingEdges = case path of
+            Nothing -> edges
+            Just actions -> filterEgdesByActions edges actions
+    pathForConnections h remainingEdges xs
+
+writeConnectionResult :: Handle -> Connection -> Maybe [Action] -> IO ()
+writeConnectionResult h (Connection v1 v2 sumCost) maybeActions = do
+    let pathString = case maybeActions of
+            Nothing -> "NA"
+            Just actions ->
+                let vertices = actionsToPath actions
+                in intercalate ";" $ map show vertices
+        row = intercalate "," [show v1, show v2, show sumCost, pathString]
+    hPutStrLn h row
+
+actionsToPath :: [Action] -> [Vertex]
+actionsToPath [] = []
+actionsToPath (x:xs) = nub ([getV1 x, getV2 x] ++ (actionsToPath xs))
 
 -- global mutable variable to keep track of the cheapest path already discovered
 minCostDiscovered :: GlobalT Float
