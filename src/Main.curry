@@ -1,21 +1,15 @@
 module Main where
 
+import Types
+import LCP
+
 import Data.List
 import Data.Maybe
 import qualified OptParse as OP
 import System.Environment
-import Control.Search.AllValues
-import Text.CSV (readCSVFile, writeCSVFile)
 import Data.Global
 import System.IO
 import System.IO.Unsafe
-
-data Options = Options {
-      vertFile :: String
-    , edgeFile :: String
-    , connectionFile :: String
-    , outFile :: String
-} deriving Show
 
 cmdParser = OP.optParser $
     OP.option (\s a -> a { vertFile = s }) (
@@ -24,7 +18,7 @@ cmdParser = OP.optParser $
         OP.<> OP.metavar "PATH"
         OP.<> OP.help "..."
     ) OP.<.> OP.option (\s a -> a { edgeFile = s }) (
-        OP.long "edgeFile"
+        OP.long "edgeFiles"
         OP.<> OP.short "e"
         OP.<> OP.metavar "PATH"
         OP.<> OP.help "..."
@@ -40,11 +34,6 @@ cmdParser = OP.optParser $
         OP.<> OP.help "..."
     )
 
-applyParse :: [Options -> Options] -> Options
-applyParse fs = foldl (flip apply) defaultOpts fs
-    where
-        defaultOpts = Options "" "" "" ""
-
 main :: IO ()
 main = do
   args <- getArgs
@@ -55,230 +44,7 @@ main = do
         let options = applyParse v
         runCNN options
 
--- reading data
-readVertices :: String -> IO [Vertex]
-readVertices path = do
-    header:rows <- readCSVFile path
-    let colID = getCol "id" header rows
-        colLong = getCol "long" header rows
-        colLat = getCol "lat" header rows
-        colFocal = getCol "focal" header rows
-    let vertices = zipWith4 makeVertex colID colLong colLat colFocal
-    return vertices
 
-zipWith4 :: (a -> b -> c -> d -> e) -> [a] -> [b] -> [c] -> [d] -> [e]
-zipWith4 _ []     _      _      _      = []
-zipWith4 _ (_:_)  []     _      _      = []
-zipWith4 _ (_:_)  (_:_)  []     _      = []
-zipWith4 _ (_:_)  (_:_)  (_:_)  []     = []
-zipWith4 f (x:xs) (y:ys) (z:zs) (w:ws) = f x y z w : zipWith4 f xs ys zs ws
-
-readEdges :: String -> [Vertex] -> IO [Edge]
-readEdges path vertices = do
-    header:rows <- readCSVFile path
-    let colV1 = getCol "v1" header rows
-        verticesV1 = map (findVertexByID vertices . read) colV1
-        colV2 = getCol "v2" header rows
-        verticesV2 = map (findVertexByID vertices . read) colV2
-        colCost = getCol "cost" header rows
-    let edges = zipWith3 makeEdge verticesV1 verticesV2 colCost
-    return edges
-    
-readConnections :: String -> [Vertex] -> IO [Connection]
-readConnections path vertices = do
-    header:rows <- readCSVFile path
-    let colV1 = getCol "v1" header rows
-        verticesV1 = map (findVertexByID vertices . read) colV1
-        colV2 = getCol "v2" header rows
-        verticesV2 = map (findVertexByID vertices . read) colV2
-        colCost = getCol "sum_cost" header rows
-    let connections = zipWith3 makeConnection verticesV1 verticesV2 colCost
-    return connections
-
-getCol :: String -> [String] -> [[String]] -> [String]
-getCol colName header rows =
-    let colNum = getColNum colName header
-    in map (\row -> row !! colNum) rows
-    where
-        getColNum :: String -> [String] -> Int
-        getColNum colName header = fromJust $ findIndex (\x -> x == colName) header 
-
-runCNN :: Options -> IO ()
-runCNN (Options vertFile edgeFile connectionFile outFile) = do
-    putStrLn "Reading data..."
-    vertices <- readVertices vertFile
-    putStrLn $ "Vertices: " ++ show (length vertices)
-    edges <- readEdges edgeFile vertices
-    putStrLn $ "Edges: " ++ show (length edges)
-    connections <- readConnections connectionFile vertices
-    putStrLn $ "Connections: " ++ show (length connections)
-    putStrLn "Searching paths..."
-    paths <- pathForConnections edges connections 0
-    putStrLn "Writing output..."
-    let outCSV = prepOutCSV connections paths
-    writeCSVFile outFile outCSV
-    putStrLn "Done"
-
-prepOutCSV :: [Connection] -> [Maybe [Action]] -> [[String]]
-prepOutCSV connections paths =
-    let header = ["v1", "v2", "initial_sum_cost", "path"]
-        content = zipWith prepCSVRow connections paths
-    in header:content
-    where
-        prepCSVRow :: Connection -> Maybe [Action] -> [String]
-        prepCSVRow (Connection v1 v2 sumCost) maybePath =
-            let connectionStrings = [show v1, show v2, show sumCost]
-                pathString = case maybePath of
-                    Nothing -> "NA"
-                    Just actions ->
-                        let vertices = actionsToPath actions
-                        in intercalate ";" $ map show vertices
-            in connectionStrings ++ [pathString]
-
-pathForConnections :: [Edge] -> [Connection] -> Int -> IO [Maybe [Action]]
-pathForConnections edges [] _ = return []
-pathForConnections edges ((Connection v1 v2 sumCost):xs) step = do
-    putStr (show step ++ ".")
-    hFlush stdout -- write our immediatelly
-    -- start computation
-    path <- findBestPath edges v1 v2 sumCost
-    case path of
-        Nothing -> do
-            nextPaths <- pathForConnections edges xs (step+1)
-            return $ Nothing:nextPaths
-        Just actions  -> do
-            --putStrLn $ show actions
-            let remainingEdges = filterEgdesByActions edges actions
-            --putStrLn $ show remainingEdges
-            nextPaths <- pathForConnections remainingEdges xs (step+1)
-            return $ (Just actions):nextPaths
-
--- global mutable variable to keep track of the cheapest path already discovered
-minCostDiscovered :: GlobalT Float
-minCostDiscovered = globalT "Main.minCostDiscovered" 10000
-branchesExplored :: GlobalT Int
-branchesExplored = globalT "Main.branchesExplored" 0
-
-findBestPath :: [Edge] -> Vertex -> Vertex -> Float -> IO (Maybe [Action])
-findBestPath edges start end sumCost = do
-    writeGlobalT minCostDiscovered (sumCost*1.5)
-    writeGlobalT branchesExplored 0
-    let actions = concat $ map edgeToActions edges
-    case isEndStillReachable end actions of
-        False -> return Nothing
-        True -> do
-            maybeBestPath <- getOneValue $ head $ sortByCost $ generatePaths actions [] start end 0 0 []
-            return maybeBestPath
-    where
-        isEndStillReachable :: Vertex -> [Action] -> Bool
-        isEndStillReachable (Vertex v _ _ _) actions = any (\(Action _ (Vertex v2 _ _ _) _) -> v == v2) actions
-
-generatePaths :: [Action] -> [Vertex] ->  Vertex -> Vertex -> Int -> Float -> [Action] -> [[Action]]
-generatePaths allActions visited current end steps cost acc
-    | current == end =
-        let update = unsafePerformIO $ do
-                writeGlobalT minCostDiscovered cost
-                return ()
-        in update `seq` [reverse acc]
-    | otherwise = do
-        action <- validActions
-        generatePaths
-            allActions
-            (current:visited) (getV2 action) end
-            (steps + 1)
-            (cost + getCost action)
-            (action:acc)
-  where
-      -- pruning mechanism
-      validActions :: [Action]
-      validActions = sortBySpatialDistToDest end $ filter checkAction allActions
-      checkAction :: Action -> Bool
-      checkAction a =
-          isFromCurV a &&
-          isNotVisited a &&
-          isCostAboveMinCostDiscovered a &&
-          isBelowBranchLimit
-      isFromCurV :: Action -> Bool
-      isFromCurV (Action v1 _ _) = v1 == current
-      isNotVisited :: Action -> Bool
-      isNotVisited (Action _ v2 _) = not $ any (\v -> v2 == v) visited
-      isCostAboveMinCostDiscovered :: Action -> Bool
-      isCostAboveMinCostDiscovered (Action _ _ c) =
-          let previousMinCost = unsafePerformIO $! readGlobalT minCostDiscovered
-          in (cost + c) < previousMinCost
-      isBelowBranchLimit :: Bool
-      isBelowBranchLimit =
-          let nrBranchesExplored = unsafePerformIO $! readGlobalT branchesExplored
-              update = unsafePerformIO $ do
-                  writeGlobalT branchesExplored (nrBranchesExplored + 1)
-                  return()
-          in update `seq` nrBranchesExplored < 1000
-
-actionsToPath :: [Action] -> [Vertex]
-actionsToPath [] = []
-actionsToPath (x:xs) = nub ([getV1 x, getV2 x] ++ (actionsToPath xs))
-
-data Edge = Edge Vertex Vertex Float -- v1 v2 cost
-    deriving (Show, Eq)
-makeEdge :: Vertex -> Vertex -> String -> Edge
-makeEdge v1 v2 cost = Edge v1 v2 (read cost)
-
-filterEgdesByActions :: [Edge] -> [Action] -> [Edge]
-filterEgdesByActions edges actions = filter (\e -> not $ isEdgeUsedByAnyAction e actions) edges
-isEdgeUsedByAnyAction :: Edge -> [Action] -> Bool
-isEdgeUsedByAnyAction edge actions = any (isEdgeUsedByAction edge) actions
-isEdgeUsedByAction :: Edge -> Action -> Bool
-isEdgeUsedByAction (Edge ev1 ev2 _) (Action av1 av2 _) = (ev1 == av1 && ev2 == av2) || (ev1 == av2 && ev2 == av1)
-
-data Action = Action Vertex Vertex Float -- v1 v2 cost
-    deriving (Show, Eq)
-edgeToActions :: Edge -> [Action]
-edgeToActions (Edge v1 v2 cost) = [Action v1 v2 cost, Action v2 v1 cost]
-getV1 :: Action -> Vertex
-getV1 (Action v1 _ _) = v1
-getV2 :: Action -> Vertex
-getV2 (Action _ v2 _) = v2
-getCost :: Action -> Float
-getCost (Action _ _ c) = c
-sumCosts :: [Action] -> Float
-sumCosts xs = sum $ map getCost xs
-minByCost :: [[Action]] -> [Action]
-minByCost xss = minimumBy (\xs ys -> compare (sumCosts xs) (sumCosts ys)) xss
-sortByCost :: [[Action]] -> [[Action]]
-sortByCost xss = sortBy (\xs ys -> sumCosts xs < sumCosts ys) xss
-
-sortBySpatialDistToDest :: Vertex -> [Action] -> [Action]
-sortBySpatialDistToDest dest xs = sortBy (\x y -> distToDest dest x < distToDest dest y) xs
-distToDest :: Vertex -> Action -> Float
-distToDest dest (Action _ v2 _) = distHaversine dest v2
-
-data Connection = Connection Vertex Vertex Float -- v1 v2 sum_cost
-    deriving Show
-makeConnection :: Vertex -> Vertex -> String -> Connection
-makeConnection v1 v2 sumCost = Connection v1 v2 (read sumCost)
-
-data Vertex = Vertex Int Float Float Bool -- v long lat focal
-instance Show Vertex where
-    show (Vertex v _ _ _) = show v
-instance Eq Vertex where
-    (Vertex v1 _ _ _) == (Vertex v2 _ _ _) = v1 == v2
-makeVertex :: String -> String -> String -> String -> Vertex
-makeVertex v long lat focal = Vertex (read v) (read long) (read lat) (read focal)
-findVertexByID :: [Vertex] -> Int -> Vertex
-findVertexByID xs voi = fromJust $ find (\(Vertex id _ _ _) -> id == voi) xs
-
-distHaversine :: Vertex -> Vertex -> Float
-distHaversine (Vertex _ long1 lat1 _) (Vertex _ long2 lat2 _) =
-    sqrt ((long1 - long2)^2 + (lat1 - lat2)^2)
-    --let r = 6371000  -- radius of Earth in metres
-    --    toRadians n = n * pi / 180
-    --    square x = x * x
-    --    cosr = cos . toRadians
-    --    dlat = toRadians (lat1 - lat2) / 2
-    --    dlong = toRadians (long1 - long2) / 2
-    --    a = square (sin dlat) + cosr lat1 * cosr lat2 * square (sin dlong)
-    --    c = 2 * atan2 (sqrt a) (sqrt (1 - a))
-    --in r * c
 
 
 
