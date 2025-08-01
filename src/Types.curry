@@ -43,6 +43,7 @@ makeConnection :: Vertex -> Vertex -> String -> Connection
 makeConnection v1 v2 sumCost = Connection v1 v2 (read sumCost)
 
 data Vertex = Vertex Int Float Float Bool -- v long lat focal
+    deriving Ord
 instance Show Vertex where
     show (Vertex v _ _ _) = show v
 instance Eq Vertex where

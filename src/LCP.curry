@@ -9,10 +9,10 @@ import System.IO.Unsafe
 import Control.Search.AllValues
 
 data LCPOptions = LCPOptions {
-      vertFile :: String
-    , edgeFile :: String
-    , connectionFile :: String
-    , outFile :: String
+      lcpVertFile :: String
+    , lcpEdgeFile :: String
+    , lcpConnectionFile :: String
+    , lcpOutFile :: String
 } deriving Show
 
 runLCP :: LCPOptions -> IO ()
