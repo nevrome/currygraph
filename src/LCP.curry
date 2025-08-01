@@ -15,8 +15,8 @@ data LCPOptions = LCPOptions {
     , outFile :: String
 } deriving Show
 
-runCNN :: LCPOptions -> IO ()
-runCNN (LCPOptions vertFile edgeFile connectionFile outFile) = do
+runLCP :: LCPOptions -> IO ()
+runLCP (LCPOptions vertFile edgeFile connectionFile outFile) = do
     putStrLn "Reading data..."
     vertices <- readVertices vertFile
     putStrLn $ "Vertices: " ++ show (length vertices)

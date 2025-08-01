@@ -72,7 +72,7 @@ main = do
               Right opts -> runWithArgs opts
     
 runWithArgs :: Options -> IO ()
-runWithArgs (Options (LCP opts)) = runCNN opts
+runWithArgs (Options (LCP opts)) = runLCP opts
 
 
 
