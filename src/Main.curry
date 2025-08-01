@@ -10,7 +10,29 @@ import Data.Global
 import System.IO
 import System.IO.Unsafe
 
---cmdParser :: OP.ParseSpec (LCP.LCPOptions -> Command)
+data Options = Options { optCommand :: Command }
+data Command =
+      NoCommand
+    | LCP LCPOptions
+
+defaultOptions :: Options
+defaultOptions = Options NoCommand
+
+lcpOpts :: Options -> LCPOptions
+lcpOpts s = case optCommand s of
+  LCP opts -> opts
+  _        -> LCPOptions "" "" "" ""
+
+applyEither :: [Options -> Either String Options] -> Options
+            -> Either String Options
+applyEither [] z = Right z
+applyEither (f:fs) z = case f z of
+  Left err -> Left err
+  Right z' -> applyEither fs z'
+
+applyParse :: [Options -> Either String Options] -> Either String Options
+applyParse fs = applyEither fs defaultOptions
+
 cmdParser = OP.optParser $
     OP.commands (OP.metavar "COMMAND") $
         OP.command "lcp" (OP.help "...")
@@ -38,30 +60,6 @@ cmdParser = OP.optParser $
                 OP.<> OP.help "..."
             )
 
-data Options = Options { optCommand     :: Command }
-
-lcpOpts :: Options -> LCPOptions
-lcpOpts s = case optCommand s of
-  LCP opts -> opts
-  _        -> LCPOptions "" "" "" ""
-
-defaultOptions :: Options
-defaultOptions = Options NoCommand
-
-applyEither :: [Options -> Either String Options] -> Options
-            -> Either String Options
-applyEither [] z = Right z
-applyEither (f:fs) z = case f z of
-  Left err -> Left err
-  Right z' -> applyEither fs z'
-
-applyParse :: [Options -> Either String Options] -> Either String Options
-applyParse fs = applyEither fs defaultOptions
-
-data Command =
-      NoCommand
-    | LCP LCPOptions
-
 main :: IO ()
 main = do
   args <- getArgs
@@ -75,13 +73,6 @@ main = do
     
 runWithArgs :: Options -> IO ()
 runWithArgs (Options (LCP opts)) = runCNN opts
-    
-    --do
-        --let options = applyParse v
-        -- runCNN v
-      --  v :: _
-        -- putStrLn "huhu"
-
 
 
 
