@@ -9,6 +9,7 @@ import System.IO.Unsafe
 import Control.Search.AllValues
 import Data.List
 import qualified Data.Map as M
+import qualified Data.Set as S
 
 data LCPOptions = LCPOptions {
       lcpVertFile :: String
@@ -73,13 +74,13 @@ findBestPath edges start end sumCost = do
     case isEndStillReachable end actions of
         False -> return Nothing
         True -> do
-            maybeBestPath <- getOneValue $ head $ sortByCost $ generatePaths actions [] start end 0 0 []
+            maybeBestPath <- getOneValue $ head $ sortByCost $ generatePaths actions S.empty start end 0 0 []
             return maybeBestPath
     where
         isEndStillReachable :: Vertex -> [Action] -> Bool
         isEndStillReachable (Vertex v _ _ _) actions = any (\(Action _ (Vertex v2 _ _ _) _) -> v == v2) actions
 
-generatePaths :: [Action] -> [Vertex] ->  Vertex -> Vertex -> Int -> Float -> [Action] -> [[Action]]
+generatePaths :: [Action] -> S.Set Vertex ->  Vertex -> Vertex -> Int -> Float -> [Action] -> [[Action]]
 generatePaths allActions visited current end steps cost acc
     | current == end =
         let update = unsafePerformIO $ do
@@ -90,7 +91,7 @@ generatePaths allActions visited current end steps cost acc
         action <- validActions
         generatePaths
             allActions
-            (current:visited) (getV2 action) end
+            (S.insert current visited) (getV2 action) end
             (steps + 1)
             (cost + getCost action)
             (action:acc)
@@ -107,7 +108,7 @@ generatePaths allActions visited current end steps cost acc
       isFromCurV :: Action -> Bool
       isFromCurV (Action v1 _ _) = v1 == current
       isNotVisited :: Action -> Bool
-      isNotVisited (Action _ v2 _) = not $ any (\v -> v2 == v) visited
+      isNotVisited (Action _ v2 _) =  not $ S.member v2 visited
       isCostAboveMinCostDiscovered :: Action -> Bool
       isCostAboveMinCostDiscovered (Action _ _ c) =
           let previousMinCost = unsafePerformIO $! readGlobalT minCostDiscovered
