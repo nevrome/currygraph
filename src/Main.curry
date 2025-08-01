@@ -27,7 +27,7 @@ lcpOpts s = case optCommand s of
 bfsOpts :: Options -> BFSOptions
 bfsOpts s = case optCommand s of
   BFS opts -> opts
-  _        -> BFSOptions "" "" ""
+  _        -> BFSOptions "" "" 6 ""
 
 applyEither :: [Options -> Either String Options] -> Options -> Either String Options
 applyEither [] z = Right z
@@ -74,6 +74,10 @@ cmdParser = OP.optParser $
                 OP.long "edgeFiles"
                 OP.<> OP.short "e"
                 OP.<> OP.metavar "PATH"
+                OP.<> OP.help "..."
+             ) OP.<.> OP.option (\s a -> Right $ a { optCommand = BFS (bfsOpts a) { bfsMinNrDestinations = read s } }) (
+                OP.long "minDests"
+                OP.<> OP.metavar "INT"
                 OP.<> OP.help "..."
             ) OP.<.> OP.option (\s a -> Right $ a { optCommand = BFS (bfsOpts a) { bfsOutFile = s } }) (
                 OP.long "outFile"

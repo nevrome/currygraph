@@ -13,11 +13,12 @@ import System.IO
 data BFSOptions = BFSOptions {
       bfsVertFile :: String
     , bfsEdgeFile :: String
+    , bfsMinNrDestinations :: Int
     , bfsOutFile :: String
 } deriving Show
 
 runBFS :: BFSOptions -> IO ()
-runBFS (BFSOptions vertFile edgeFile outFile) = do
+runBFS (BFSOptions vertFile edgeFile minNrDests outFile) = do
     putStrLn "Reading data..."
     vertices <- readVertices vertFile
     putStrLn $ "Vertices: " ++ show (length vertices)
@@ -31,24 +32,24 @@ runBFS (BFSOptions vertFile edgeFile outFile) = do
     putStrLn "Searching..."
     h <- openFile outFile WriteMode
     hPutStrLn h "v1,v2,sum_cost" -- csv header
-    mapM_ (bfsNClosest h adj verticesDestSet) verticesDest
+    mapM_ (bfsNClosest h adj verticesDestSet minNrDests) verticesDest
     hFlush h
     hClose h
     putStrLn "Done"
     
-bfsNClosest :: Handle -> AdjacencyMap -> S.Set Vertex -> Vertex -> IO ()
-bfsNClosest h adj destinationSet start = do
-    destInLayers <- getOneValue $ bfsLayersPruned adj destinationSet start
+bfsNClosest :: Handle -> AdjacencyMap -> S.Set Vertex -> Int -> Vertex -> IO ()
+bfsNClosest h adj destinationSet minNrDests start = do
+    destInLayers <- getOneValue $ bfsLayersPruned adj destinationSet minNrDests start
     case destInLayers of
         Nothing -> return ()
         Just layers -> writeBFSResults h start layers
 
-bfsLayersPruned :: AdjacencyMap -> S.Set Vertex -> Vertex -> [[Vertex]]
-bfsLayersPruned adj destinationSet start = go S.empty 0 [start]
+bfsLayersPruned :: AdjacencyMap -> S.Set Vertex -> Int -> Vertex -> [[Vertex]]
+bfsLayersPruned adj destinationSet minNrDests start = go S.empty 0 [start]
     where
         go _ _ [] = []
         go visited nrDestsFound layer
-            | nrDestsFound >= 6 = []
+            | nrDestsFound >= minNrDests = []
             | otherwise =
                 let (foundDestinations,expandable) = partition (\x -> S.member x destinationSetWithoutFocal) layer
                     newNrDestsFound = nrDestsFound + length foundDestinations
