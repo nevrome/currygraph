@@ -62,8 +62,16 @@ readVertices path = do
     let colID = getCol "id" header rows
         colLong = getCol "long" header rows
         colLat = getCol "lat" header rows
-    let vertices = zipWith3 makeVertex colID colLong colLat
+        colFocal = getCol "focal" header rows
+    let vertices = zipWith4 makeVertex colID colLong colLat colFocal
     return vertices
+
+zipWith4 :: (a -> b -> c -> d -> e) -> [a] -> [b] -> [c] -> [d] -> [e]
+zipWith4 _ []     _      _      _      = []
+zipWith4 _ (_:_)  []     _      _      = []
+zipWith4 _ (_:_)  (_:_)  []     _      = []
+zipWith4 _ (_:_)  (_:_)  (_:_)  []     = []
+zipWith4 f (x:xs) (y:ys) (z:zs) (w:ws) = f x y z w : zipWith4 f xs ys zs ws
 
 readEdges :: String -> [Vertex] -> IO [Edge]
 readEdges path vertices = do
@@ -148,15 +156,12 @@ pathForConnections edges ((Connection v1 v2 sumCost):xs) step = do
 -- global mutable variable to keep track of the cheapest path already discovered
 minCostDiscovered :: GlobalT Float
 minCostDiscovered = globalT "Main.minCostDiscovered" 10000
---stopSearch :: GlobalT Bool
---stopSearch = globalT "Main.stopSearch" False
 branchesExplored :: GlobalT Int
 branchesExplored = globalT "Main.branchesExplored" 0
 
 findBestPath :: [Edge] -> Vertex -> Vertex -> Float -> IO (Maybe [Action])
 findBestPath edges start end sumCost = do
     writeGlobalT minCostDiscovered (sumCost*1.5)
-    --writeGlobalT stopSearch False
     writeGlobalT branchesExplored 0
     let actions = concat $ map edgeToActions edges
     case isEndStillReachable end actions of
@@ -166,14 +171,13 @@ findBestPath edges start end sumCost = do
             return maybeBestPath
     where
         isEndStillReachable :: Vertex -> [Action] -> Bool
-        isEndStillReachable (Vertex v _ _) actions = any (\(Action _ (Vertex v2 _ _) _) -> v == v2) actions
+        isEndStillReachable (Vertex v _ _ _) actions = any (\(Action _ (Vertex v2 _ _ _) _) -> v == v2) actions
 
 generatePaths :: [Action] -> [Vertex] ->  Vertex -> Vertex -> Int -> Float -> [Action] -> [[Action]]
 generatePaths allActions visited current end steps cost acc
     | current == end =
         let update = unsafePerformIO $ do
                 writeGlobalT minCostDiscovered cost
-                --writeGlobalT stopSearch True
                 return ()
         in update `seq` [reverse acc]
     | otherwise = do
@@ -190,13 +194,10 @@ generatePaths allActions visited current end steps cost acc
       validActions = sortBySpatialDistToDest end $ filter checkAction allActions
       checkAction :: Action -> Bool
       checkAction a =
-          --(not isStopSearch) &&
           isFromCurV a &&
           isNotVisited a &&
           isCostAboveMinCostDiscovered a &&
           isBelowBranchLimit
-      --isStopSearch :: Bool
-      --isStopSearch = unsafePerformIO $! readGlobalT stopSearch
       isFromCurV :: Action -> Bool
       isFromCurV (Action v1 _ _) = v1 == current
       isNotVisited :: Action -> Bool
@@ -256,18 +257,18 @@ data Connection = Connection Vertex Vertex Float -- v1 v2 sum_cost
 makeConnection :: Vertex -> Vertex -> String -> Connection
 makeConnection v1 v2 sumCost = Connection v1 v2 (read sumCost)
 
-data Vertex = Vertex Int Float Float -- v long lat
+data Vertex = Vertex Int Float Float Bool -- v long lat focal
 instance Show Vertex where
-    show (Vertex v _ _) = show v
+    show (Vertex v _ _ _) = show v
 instance Eq Vertex where
-    (Vertex v1 _ _) == (Vertex v2 _ _) = v1 == v2
-makeVertex :: String -> String -> String -> Vertex
-makeVertex v long lat = Vertex (read v) (read long) (read lat)
+    (Vertex v1 _ _ _) == (Vertex v2 _ _ _) = v1 == v2
+makeVertex :: String -> String -> String -> String -> Vertex
+makeVertex v long lat focal = Vertex (read v) (read long) (read lat) (read focal)
 findVertexByID :: [Vertex] -> Int -> Vertex
-findVertexByID xs voi = fromJust $ find (\(Vertex id _ _) -> id == voi) xs
+findVertexByID xs voi = fromJust $ find (\(Vertex id _ _ _) -> id == voi) xs
 
 distHaversine :: Vertex -> Vertex -> Float
-distHaversine (Vertex _ long1 lat1) (Vertex _ long2 lat2) =
+distHaversine (Vertex _ long1 lat1 _) (Vertex _ long2 lat2 _) =
     sqrt ((long1 - long2)^2 + (lat1 - lat2)^2)
     --let r = 6371000  -- radius of Earth in metres
     --    toRadians n = n * pi / 180
