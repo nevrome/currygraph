@@ -54,11 +54,12 @@ makeConnection :: Vertex -> Vertex -> String -> Connection
 makeConnection v1 v2 sumCost = Connection v1 v2 (read sumCost)
 
 data Vertex = Vertex Int Float Float Bool -- v long lat focal
-    deriving Ord
 instance Show Vertex where
     show (Vertex v _ _ _) = show v
 instance Eq Vertex where
     (Vertex v1 _ _ _) == (Vertex v2 _ _ _) = v1 == v2
+instance Ord Vertex where
+  compare (Vertex v1 _ _ _) (Vertex v2 _ _ _) = compare v1 v2
 makeVertex :: String -> String -> String -> String -> Vertex
 makeVertex v long lat focal = Vertex (read v) (read long) (read lat) (read focal)
 findVertexByID :: [Vertex] -> Int -> Vertex

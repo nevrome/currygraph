@@ -8,6 +8,7 @@ import qualified Data.Set as S
 import Data.Maybe
 import Data.List
 import Control.Search.AllValues
+import System.IO
 
 data BFSOptions = BFSOptions {
       bfsVertFile :: String
@@ -24,15 +25,23 @@ runBFS (BFSOptions vertFile edgeFile outFile) = do
     putStrLn $ "Edges: " ++ show (length edges)
     putStrLn "Building adjacency map..."
     let adj = buildAdjacencyMap edges
-        verticesDest = S.fromList $ filter (\(Vertex _ _ _ f) -> f) vertices
-        focal = fromJust $ find (\(Vertex v _ _ _) ->  v == 22) vertices
+    putStrLn $ "Size adjacency map: " ++ show (M.size adj) -- to force evaluation
+    let verticesDest = filter (\(Vertex _ _ _ f) -> f) vertices
+        verticesDestSet = S.fromList verticesDest
     putStrLn "Searching..."
-    zuck <- getOneValue $ bfsLayersPruned adj verticesDest focal
-    --putStrLn "Writing output..."
-    --writePaths outFile connections paths
-    putStrLn $ show $ zuck
+    h <- openFile outFile WriteMode
+    hPutStrLn h "v1,v2,sum_cost" -- csv header
+    mapM_ (bfsNClosest h adj verticesDestSet) verticesDest
+    hFlush h
+    hClose h
+    putStrLn "Done"
     
-
+bfsNClosest :: Handle -> AdjacencyMap -> S.Set Vertex -> Vertex -> IO ()
+bfsNClosest h adj destinationSet start = do
+    destInLayers <- getOneValue $ bfsLayersPruned adj destinationSet start
+    case destInLayers of
+        Nothing -> return ()
+        Just layers -> writeBFSResults h start layers
 
 bfsLayersPruned :: AdjacencyMap -> S.Set Vertex -> Vertex -> [[Vertex]]
 bfsLayersPruned adj destinationSet start = go S.empty 0 [start]
@@ -50,3 +59,16 @@ bfsLayersPruned adj destinationSet start = go S.empty 0 [start]
         isNotAlreadyVisited visited v = not $ S.member v visited
         destinationSetWithoutFocal :: S.Set Vertex
         destinationSetWithoutFocal = S.delete start destinationSet
+
+writeBFSResults :: Handle -> Vertex -> [[Vertex]] -> IO ()
+writeBFSResults h start layers = do
+    let indexedLayers = zip [1..] (drop 1 layers) -- skip layer 0: assumed to be always []
+        triples = [(start, v, layerIdx) | (layerIdx, verts) <- indexedLayers, v <- verts]
+    mapM_ (\(from, to, cost) -> hPutStrLn h (show from ++ "," ++ show to ++ "," ++ show cost)) triples
+    
+    
+    
+    
+    
+    
+    
