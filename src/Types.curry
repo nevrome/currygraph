@@ -3,18 +3,6 @@ module Types where
 import Data.List
 import Data.Maybe
 
-data LCPOptions = LCPOptions {
-      vertFile :: String
-    , edgeFile :: String
-    , connectionFile :: String
-    , outFile :: String
-} deriving Show
-
-applyParse :: [LCPOptions -> LCPOptions] -> LCPOptions
-applyParse fs = foldl (flip apply) defaultOpts fs
-    where
-        defaultOpts = LCPOptions "" "" "" ""
-
 data Edge = Edge Vertex Vertex Float -- v1 v2 cost
     deriving (Show, Eq)
 makeEdge :: Vertex -> Vertex -> String -> Edge

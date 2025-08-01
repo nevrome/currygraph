@@ -1,6 +1,5 @@
 module Main where
 
-import Types
 import LCP
 
 import Data.List

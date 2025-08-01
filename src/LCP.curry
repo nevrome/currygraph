@@ -8,6 +8,18 @@ import System.IO
 import System.IO.Unsafe
 import Control.Search.AllValues
 
+data LCPOptions = LCPOptions {
+      vertFile :: String
+    , edgeFile :: String
+    , connectionFile :: String
+    , outFile :: String
+} deriving Show
+
+applyParse :: [LCPOptions -> LCPOptions] -> LCPOptions
+applyParse fs = foldl (flip apply) defaultOpts fs
+    where
+        defaultOpts = LCPOptions "" "" "" ""
+
 runCNN :: LCPOptions -> IO ()
 runCNN (LCPOptions vertFile edgeFile connectionFile outFile) = do
     putStrLn "Reading data..."
