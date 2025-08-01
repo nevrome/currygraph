@@ -2,6 +2,17 @@ module Types where
 
 import Data.List
 import Data.Maybe
+import qualified Data.Map as M
+
+type AdjacencyMap = M.Map Vertex [Vertex]
+
+buildAdjacencyMap :: [Edge] -> AdjacencyMap
+buildAdjacencyMap es = foldl addEdge M.empty es
+  where
+    addEdge m (Edge v1 v2 _) = M.insertWith (++) v1 [v2] $ M.insertWith (++) v2 [v1] m
+
+getNeighbors :: AdjacencyMap -> Vertex -> [Vertex]
+getNeighbors adj v = M.findWithDefault [] v adj
 
 data Edge = Edge Vertex Vertex Float -- v1 v2 cost
     deriving (Show, Eq)

@@ -32,29 +32,21 @@ runBFS (BFSOptions vertFile edgeFile outFile) = do
     --writePaths outFile connections paths
     putStrLn $ show $ zuck
     
-type AdjacencyMap = M.Map Vertex [Vertex]
 
-buildAdjacencyMap :: [Edge] -> AdjacencyMap
-buildAdjacencyMap es = foldl addEdge M.empty es
-  where
-    addEdge m (Edge v1 v2 _) = M.insertWith (++) v1 [v2] $ M.insertWith (++) v2 [v1] m
 
 bfsLayersPruned :: AdjacencyMap -> S.Set Vertex -> Vertex -> [[Vertex]]
-bfsLayersPruned adj destinationSet start = bfs' S.empty 0 [start]
+bfsLayersPruned adj destinationSet start = go S.empty 0 [start]
     where
-        bfs' _ _ [] = []
-        bfs' visited nrDestsFound layer
+        go _ _ [] = []
+        go visited nrDestsFound layer
             | nrDestsFound >= 6 = []
             | otherwise =
-                let foundDestinations = filter (\x -> S.member x destinationSetWithoutFocal) layer
-                    nowVisited = S.union visited (S.fromList layer)
-                    expandable = filter (\x -> not $ S.member x destinationSetWithoutFocal) layer
-                    nextLayer = nub $ concatMap (\v -> filter (isNotVisited nowVisited) (getNeighbors adj v)) expandable
+                let (foundDestinations,expandable) = partition (\x -> S.member x destinationSetWithoutFocal) layer
                     newNrDestsFound = nrDestsFound + length foundDestinations
-                in foundDestinations:(bfs' nowVisited newNrDestsFound nextLayer)
-        getNeighbors :: AdjacencyMap -> Vertex -> [Vertex]
-        getNeighbors adj v = M.findWithDefault [] v adj
-        isNotVisited :: S.Set Vertex -> Vertex -> Bool
-        isNotVisited visited v = not $ S.member v visited
+                    nowVisited = S.union visited (S.fromList layer)
+                    nextLayer = nub $ concatMap (\v -> filter (isNotAlreadyVisited nowVisited) (getNeighbors adj v)) expandable
+                in foundDestinations:(go nowVisited newNrDestsFound nextLayer)
+        isNotAlreadyVisited :: S.Set Vertex -> Vertex -> Bool
+        isNotAlreadyVisited visited v = not $ S.member v visited
         destinationSetWithoutFocal :: S.Set Vertex
         destinationSetWithoutFocal = S.delete start destinationSet
