@@ -91,7 +91,7 @@ cmdParser = OP.optParser $
 main :: IO ()
 main = do
   args <- getArgs
-  parseResult <- return $ OP.parse (intercalate " " args) cmdParser "cnn"
+  parseResult <- return $ OP.parse (intercalate " " args) cmdParser "currygraph"
   case parseResult of
     Left err -> putStrLn err
     Right  r -> 
