@@ -15,12 +15,13 @@ data LCPOptions = LCPOptions {
       lcpVertFile :: String
     , lcpEdgeFile :: String
     , lcpConnectionFile :: String
+    , lcpDeleteUsedEdges :: Bool
     , lcpMaxNrBranches :: Int
     , lcpOutFile :: String
 } deriving Show
 
 runLCP :: LCPOptions -> IO ()
-runLCP (LCPOptions vertFile edgeFile connectionFile maxNrBranches outFile) = do
+runLCP (LCPOptions vertFile edgeFile connectionFile deleteUsed maxNrBranches outFile) = do
     putStrLn "Reading data..."
     vertices <- readVertices vertFile
     let vm = buildVertexMap vertices
@@ -32,20 +33,22 @@ runLCP (LCPOptions vertFile edgeFile connectionFile maxNrBranches outFile) = do
     putStrLn "Searching..."
     h <- openFile outFile WriteMode
     hPutStrLn h "v1,v2,initial_sum_cost,path" -- csv header
-    pathForConnections h edges connections maxNrBranches
+    pathForConnections h edges connections deleteUsed maxNrBranches
     hFlush h
     hClose h
     putStrLn "Done"
 
-pathForConnections :: Handle -> [Edge] -> [Connection] -> Int -> IO ()
-pathForConnections _ _ [] _ = return ()
-pathForConnections h edges (con@(Connection v1 v2 sumCost):xs) maxNrBranches = do
+pathForConnections :: Handle -> [Edge] -> [Connection] -> Bool -> Int -> IO ()
+pathForConnections _ _ [] _ _ = return ()
+pathForConnections h edges (con@(Connection v1 v2 sumCost):xs) deleteUsed maxNrBranches = do
     path <- findBestPath edges v1 v2 sumCost maxNrBranches
     writeConnectionResult h con path
-    let remainingEdges = case path of
-            Nothing -> edges
-            Just actions -> filterEgdesByActions edges actions
-    pathForConnections h remainingEdges xs maxNrBranches
+    let remainingEdges = case deleteUsed of
+            True -> case path of
+                Nothing -> edges
+                Just actions -> filterEgdesByActions edges actions
+            False -> edges
+    pathForConnections h remainingEdges xs deleteUsed maxNrBranches
 
 writeConnectionResult :: Handle -> Connection -> Maybe [Action] -> IO ()
 writeConnectionResult h (Connection v1 v2 sumCost) maybeActions = do

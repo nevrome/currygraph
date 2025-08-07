@@ -57,6 +57,10 @@ docConnectionFile = OP.long "connectionFile"
             OP.<> OP.metavar "PATH"
             OP.<> OP.help "..."
 
+docDeleteUsedEdges :: OP.Mod
+docDeleteUsedEdges = OP.long "deleteUsedEdges"
+            OP.<> OP.help "..."
+
 docMaxNrBranches :: OP.Mod
 docMaxNrBranches = OP.long "maxNrBranches"
             OP.<> OP.metavar "Int"
@@ -65,7 +69,7 @@ docMaxNrBranches = OP.long "maxNrBranches"
 lcpOpts :: Options -> LCPOptions
 lcpOpts s = case com s of
   LCP opts -> opts
-  _        -> LCPOptions "" "" "" 1000 ""
+  _        -> LCPOptions "" "" "" False 1000 ""
 
 -- only bfs
 
@@ -82,7 +86,6 @@ docMinDests = OP.long "minDests"
 
 docStopAtDests :: OP.Mod
 docStopAtDests = OP.long "stopAtDests"
-            OP.<> OP.metavar "Bool"
             OP.<> OP.help "..."
 
 bfsOpts :: Options -> BFSOptions
@@ -97,6 +100,7 @@ cmdParser = OP.optParser $
                 OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpVertFile = s}}) docVertFile
             <.> OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpEdgeFile = s}}) docEdgeFile
             <.> OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpConnectionFile = s}}) docConnectionFile
+            <.> OP.flag (\a -> Right $ a {com = LCP (lcpOpts a) {lcpDeleteUsedEdges = True}}) docDeleteUsedEdges
             <.> OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpMaxNrBranches = read s}}) docMaxNrBranches
             <.> OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpOutFile = s}}) docOutFile
         ) OP.<|>
