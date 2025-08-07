@@ -5,13 +5,14 @@ import BFS
 
 import Data.List
 import Data.Maybe
+import OptParse ((<.>))
 import qualified OptParse as OP
 import System.Environment
 import Data.Global
 import System.IO
 import System.IO.Unsafe
 
-data Options = Options { optCommand :: Command }
+data Options = Options { com :: Command }
 data Command =
       NoCommand
     | LCP LCPOptions
@@ -21,11 +22,11 @@ defaultOptions :: Options
 defaultOptions = Options NoCommand
 
 lcpOpts :: Options -> LCPOptions
-lcpOpts s = case optCommand s of
+lcpOpts s = case com s of
   LCP opts -> opts
   _        -> LCPOptions "" "" "" ""
 bfsOpts :: Options -> BFSOptions
-bfsOpts s = case optCommand s of
+bfsOpts s = case com s of
   BFS opts -> opts
   _        -> BFSOptions "" "" 6 ""
 
@@ -37,54 +38,50 @@ applyEither (f:fs) z = case f z of
 applyParse :: [Options -> Either String Options] -> Either String Options
 applyParse fs = applyEither fs defaultOptions
 
+docVertFile :: OP.Mod
+docVertFile = OP.long "vertFile"
+              OP.<> OP.short "v"
+              OP.<> OP.metavar "PATH"
+              OP.<> OP.help "..."
+
+docEdgeFile :: OP.Mod
+docEdgeFile = OP.long "edgeFile"
+              OP.<> OP.short "e"
+              OP.<> OP.metavar "PATH"
+              OP.<> OP.help "..."
+
+docConnectionFile :: OP.Mod
+docConnectionFile = OP.long "connectionFile"
+              OP.<> OP.short "c"
+              OP.<> OP.metavar "PATH"
+              OP.<> OP.help "..."
+
+docOutFile :: OP.Mod
+docOutFile = OP.long "outFile"
+             OP.<> OP.short "o"
+             OP.<> OP.metavar "PATH"
+             OP.<> OP.help "..."
+
+docMinDests :: OP.Mod
+docMinDests = OP.long "minDests"
+              OP.<> OP.metavar "INT"
+              OP.<> OP.help "..."
+
 cmdParser = OP.optParser $
     OP.commands (OP.metavar "COMMAND") (
-        OP.command "lcp" (OP.help "...") (\a -> Right $ a { optCommand = LCP (lcpOpts a) }) (            
-            OP.option (\s a -> Right $ a { optCommand = LCP (lcpOpts a) { lcpVertFile = s } }) (
-                OP.long "vertFile"
-                OP.<> OP.short "v"
-                OP.<> OP.metavar "PATH"
-                OP.<> OP.help "..."
-            ) OP.<.> OP.option (\s a -> Right $ a { optCommand = LCP (lcpOpts a) { lcpEdgeFile = s } }) (
-                OP.long "edgeFiles"
-                OP.<> OP.short "e"
-                OP.<> OP.metavar "PATH"
-                OP.<> OP.help "..."
-            ) OP.<.> OP.option (\s a -> Right $ a { optCommand = LCP (lcpOpts a) { lcpConnectionFile = s } }) (
-                OP.long "connectionFile"
-                OP.<> OP.short "c"
-                OP.<> OP.metavar "PATH"
-                OP.<> OP.help "..."
-            ) OP.<.> OP.option (\s a -> Right $ a { optCommand = LCP (lcpOpts a) { lcpOutFile = s } }) (
-                OP.long "outFile"
-                OP.<> OP.short "o"
-                OP.<> OP.metavar "PATH"
-                OP.<> OP.help "..."
-            )
-        ) OP.<|> (
+        OP.command "lcp" (OP.help "...")
+          (\a -> Right $ a { com = LCP (lcpOpts a) }) (
+                OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpVertFile = s}}) docVertFile
+            <.> OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpEdgeFile = s}}) docEdgeFile
+            <.> OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpConnectionFile = s}}) docConnectionFile
+            <.> OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpOutFile = s}}) docOutFile
+        ) OP.<|>
         OP.command "bfs" (OP.help "...")
-                (\a -> Right $ a { optCommand = BFS (bfsOpts a) })
-            $
-            OP.option (\s a -> Right $ a { optCommand = BFS (bfsOpts a) { bfsVertFile = s } }) (
-                OP.long "vertFile"
-                OP.<> OP.short "v"
-                OP.<> OP.metavar "PATH"
-                OP.<> OP.help "..."
-            ) OP.<.> OP.option (\s a -> Right $ a { optCommand = BFS (bfsOpts a) { bfsEdgeFile = s } }) (
-                OP.long "edgeFiles"
-                OP.<> OP.short "e"
-                OP.<> OP.metavar "PATH"
-                OP.<> OP.help "..."
-             ) OP.<.> OP.option (\s a -> Right $ a { optCommand = BFS (bfsOpts a) { bfsMinNrDestinations = read s } }) (
-                OP.long "minDests"
-                OP.<> OP.metavar "INT"
-                OP.<> OP.help "..."
-            ) OP.<.> OP.option (\s a -> Right $ a { optCommand = BFS (bfsOpts a) { bfsOutFile = s } }) (
-                OP.long "outFile"
-                OP.<> OP.short "o"
-                OP.<> OP.metavar "PATH"
-                OP.<> OP.help "..."
-            )
+            (\a -> Right $ a { com = BFS (bfsOpts a) }) (
+                OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsVertFile = s}}) docVertFile
+            <.> OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsEdgeFile = s}}) docEdgeFile
+            <.> OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsMinNrDestinations = read s}}) docMinDests
+            <.> OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsOutFile = s}}) docOutFile
         )
     )
 
