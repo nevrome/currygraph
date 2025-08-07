@@ -28,27 +28,29 @@ runLCP (LCPOptions vertFile edgeFile connectionFile deleteUsed maxNrBranches out
     putStrLn $ "Vertices: " ++ show (M.size vm)
     edges <- readEdges edgeFile vm
     putStrLn $ "Edges: " ++ show (length edges)
+    let actions = concat $ map edgeToActions edges
+    putStrLn $ "Actions: " ++ show (length actions)
     connections <- readConnections connectionFile vm
     putStrLn $ "Connections: " ++ show (length connections)
     putStrLn "Searching..."
     h <- openFile outFile WriteMode
     hPutStrLn h "v1,v2,initial_sum_cost,path" -- csv header
-    pathForConnections h edges connections deleteUsed maxNrBranches
+    pathForConnections h actions connections deleteUsed maxNrBranches
     hFlush h
     hClose h
     putStrLn "Done"
 
-pathForConnections :: Handle -> [Edge] -> [Connection] -> Bool -> Int -> IO ()
+pathForConnections :: Handle -> [Action] -> [Connection] -> Bool -> Int -> IO ()
 pathForConnections _ _ [] _ _ = return ()
-pathForConnections h edges (con@(Connection v1 v2 sumCost):xs) deleteUsed maxNrBranches = do
-    path <- findBestPath edges v1 v2 sumCost maxNrBranches
+pathForConnections h allActions (con@(Connection v1 v2 sumCost):xs) deleteUsed maxNrBranches = do
+    path <- findBestPath allActions v1 v2 sumCost maxNrBranches
     writeConnectionResult h con path
-    let remainingEdges = case deleteUsed of
+    let remainingActions = case deleteUsed of
             True -> case path of
-                Nothing -> edges
-                Just actions -> filterEgdesByActions edges actions
-            False -> edges
-    pathForConnections h remainingEdges xs deleteUsed maxNrBranches
+                Nothing -> allActions
+                Just actions -> filterActions allActions actions
+            False -> allActions
+    pathForConnections h remainingActions xs deleteUsed maxNrBranches
 
 writeConnectionResult :: Handle -> Connection -> Maybe [Action] -> IO ()
 writeConnectionResult h (Connection v1 v2 sumCost) maybeActions = do
@@ -70,11 +72,10 @@ minCostDiscovered = globalT "Main.minCostDiscovered" 0
 branchesExplored :: GlobalT Int
 branchesExplored = globalT "Main.branchesExplored" 0
 
-findBestPath :: [Edge] -> Vertex -> Vertex -> Float -> Int -> IO (Maybe [Action])
-findBestPath edges start end sumCost maxNrBranches = do
+findBestPath :: [Action] -> Vertex -> Vertex -> Float -> Int -> IO (Maybe [Action])
+findBestPath actions start end sumCost maxNrBranches = do
     writeGlobalT minCostDiscovered (sumCost*1.5)
     writeGlobalT branchesExplored 0
-    let actions = concat $ map edgeToActions edges
     case isEndStillReachable end actions of
         False -> return Nothing
         True -> do

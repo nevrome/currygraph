@@ -51,6 +51,14 @@ minByCost xss = minimumBy (\xs ys -> compare (sumCosts xs) (sumCosts ys)) xss
 sortByCost :: [[Action]] -> [[Action]]
 sortByCost xss = sortBy (\xs ys -> sumCosts xs < sumCosts ys) xss
 
+filterActions :: [Action] -> [Action] -> [Action]
+filterActions all toRemove = filter (\a -> not $ isActionUsedByAny a toRemove) all
+isActionUsedByAny :: Action -> [Action] -> Bool
+isActionUsedByAny a toRemove = any (isActionUsed a) toRemove
+isActionUsed :: Action -> Action -> Bool
+isActionUsed (Action av1 av2 _) (Action bv1 bv2 _) =
+    (av1 == bv1 && av2 == bv2) || (av1 == bv2 && av2 == bv1)
+
 sortBySpatialDistToDest :: Vertex -> [Action] -> [Action]
 sortBySpatialDistToDest dest xs = sortBy (\x y -> distToDest dest x < distToDest dest y) xs
 distToDest :: Vertex -> Action -> Float
