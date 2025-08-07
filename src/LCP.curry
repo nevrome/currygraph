@@ -15,11 +15,12 @@ data LCPOptions = LCPOptions {
       lcpVertFile :: String
     , lcpEdgeFile :: String
     , lcpConnectionFile :: String
+    , lcpMaxNrBranches :: Int
     , lcpOutFile :: String
 } deriving Show
 
 runLCP :: LCPOptions -> IO ()
-runLCP (LCPOptions vertFile edgeFile connectionFile outFile) = do
+runLCP (LCPOptions vertFile edgeFile connectionFile maxNrBranches outFile) = do
     putStrLn "Reading data..."
     vertices <- readVertices vertFile
     let vm = buildVertexMap vertices
@@ -31,20 +32,20 @@ runLCP (LCPOptions vertFile edgeFile connectionFile outFile) = do
     putStrLn "Searching..."
     h <- openFile outFile WriteMode
     hPutStrLn h "v1,v2,initial_sum_cost,path" -- csv header
-    pathForConnections h edges connections
+    pathForConnections h edges connections maxNrBranches
     hFlush h
     hClose h
     putStrLn "Done"
 
-pathForConnections :: Handle -> [Edge] -> [Connection] -> IO ()
-pathForConnections _ _ [] = return ()
-pathForConnections h edges (con@(Connection v1 v2 sumCost):xs) = do
-    path <- findBestPath edges v1 v2 sumCost
+pathForConnections :: Handle -> [Edge] -> [Connection] -> Int -> IO ()
+pathForConnections _ _ [] _ = return ()
+pathForConnections h edges (con@(Connection v1 v2 sumCost):xs) maxNrBranches = do
+    path <- findBestPath edges v1 v2 sumCost maxNrBranches
     writeConnectionResult h con path
     let remainingEdges = case path of
             Nothing -> edges
             Just actions -> filterEgdesByActions edges actions
-    pathForConnections h remainingEdges xs
+    pathForConnections h remainingEdges xs maxNrBranches
 
 writeConnectionResult :: Handle -> Connection -> Maybe [Action] -> IO ()
 writeConnectionResult h (Connection v1 v2 sumCost) maybeActions = do
@@ -62,26 +63,26 @@ actionsToPath (x:xs) = nub ([getV1 x, getV2 x] ++ (actionsToPath xs))
 
 -- global mutable variable to keep track of the cheapest path already discovered
 minCostDiscovered :: GlobalT Float
-minCostDiscovered = globalT "Main.minCostDiscovered" 10000
+minCostDiscovered = globalT "Main.minCostDiscovered" 0
 branchesExplored :: GlobalT Int
 branchesExplored = globalT "Main.branchesExplored" 0
 
-findBestPath :: [Edge] -> Vertex -> Vertex -> Float -> IO (Maybe [Action])
-findBestPath edges start end sumCost = do
+findBestPath :: [Edge] -> Vertex -> Vertex -> Float -> Int -> IO (Maybe [Action])
+findBestPath edges start end sumCost maxNrBranches = do
     writeGlobalT minCostDiscovered (sumCost*1.5)
     writeGlobalT branchesExplored 0
     let actions = concat $ map edgeToActions edges
     case isEndStillReachable end actions of
         False -> return Nothing
         True -> do
-            maybeBestPath <- getOneValue $ head $ sortByCost $ generatePaths actions S.empty start end 0 0 []
+            maybeBestPath <- getOneValue $ head $ sortByCost $ generatePaths actions maxNrBranches end S.empty start 0 []
             return maybeBestPath
     where
         isEndStillReachable :: Vertex -> [Action] -> Bool
         isEndStillReachable (Vertex v _ _ ) actions = any (\(Action _ (Vertex v2 _ _ ) _) -> v == v2) actions
 
-generatePaths :: [Action] -> S.Set Vertex ->  Vertex -> Vertex -> Int -> Float -> [Action] -> [[Action]]
-generatePaths allActions visited current end steps cost acc
+generatePaths :: [Action] -> Int -> Vertex -> S.Set Vertex -> Vertex -> Float -> [Action] -> [[Action]]
+generatePaths allActions maxNrBranches end visited current cost acc
     | current == end =
         let update = unsafePerformIO $ do
                 writeGlobalT minCostDiscovered cost
@@ -90,9 +91,8 @@ generatePaths allActions visited current end steps cost acc
     | otherwise = do
         action <- validActions
         generatePaths
-            allActions
-            (S.insert current visited) (getV2 action) end
-            (steps + 1)
+            allActions maxNrBranches end
+            (S.insert current visited) (getV2 action)
             (cost + getCost action)
             (action:acc)
   where
@@ -119,4 +119,4 @@ generatePaths allActions visited current end steps cost acc
               update = unsafePerformIO $ do
                   writeGlobalT branchesExplored (nrBranchesExplored + 1)
                   return()
-          in update `seq` nrBranchesExplored < 1000
+          in update `seq` nrBranchesExplored < maxNrBranches

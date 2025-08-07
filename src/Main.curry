@@ -57,10 +57,15 @@ docConnectionFile = OP.long "connectionFile"
             OP.<> OP.metavar "PATH"
             OP.<> OP.help "..."
 
+docMaxNrBranches :: OP.Mod
+docMaxNrBranches = OP.long "maxNrBranches"
+            OP.<> OP.metavar "Int"
+            OP.<> OP.help "..."
+
 lcpOpts :: Options -> LCPOptions
 lcpOpts s = case com s of
   LCP opts -> opts
-  _        -> LCPOptions "" "" "" ""
+  _        -> LCPOptions "" "" "" 1000 ""
 
 -- only bfs
 
@@ -92,6 +97,7 @@ cmdParser = OP.optParser $
                 OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpVertFile = s}}) docVertFile
             <.> OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpEdgeFile = s}}) docEdgeFile
             <.> OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpConnectionFile = s}}) docConnectionFile
+            <.> OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpMaxNrBranches = read s}}) docMaxNrBranches
             <.> OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpOutFile = s}}) docOutFile
         ) OP.<|>
         OP.command "bfs" (OP.help "...")
