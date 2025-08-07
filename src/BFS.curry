@@ -21,9 +21,9 @@ runBFS :: BFSOptions -> IO ()
 runBFS (BFSOptions vertFile edgeFile minNrDests outFile) = do
     putStrLn "Reading data..."
     vertices <- readVertices vertFile
-    let verticesMap = M.fromList $ map (\v@(Vertex v1 _ _ _) -> (v1,v)) vertices
+    let vm = buildVertexMap vertices
     putStrLn $ "Vertices: " ++ show (length vertices)
-    edges <- readEdges edgeFile verticesMap
+    edges <- readEdges edgeFile vm
     putStrLn $ "Edges: " ++ show (length edges)
     putStrLn "Building adjacency map..."
     let adj = buildAdjacencyMap edges

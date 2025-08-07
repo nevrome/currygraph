@@ -25,7 +25,7 @@ zipWith4 _ (_:_)  (_:_)  []     _      = []
 zipWith4 _ (_:_)  (_:_)  (_:_)  []     = []
 zipWith4 f (x:xs) (y:ys) (z:zs) (w:ws) = f x y z w : zipWith4 f xs ys zs ws
 
-readEdges :: String -> M.Map Int Vertex -> IO [Edge]
+readEdges :: String -> VertexMap -> IO [Edge]
 readEdges path verticesMap = do
     header:rows <- readCSVFile path
     let colV1 = getCol "v1" header rows
@@ -36,7 +36,7 @@ readEdges path verticesMap = do
     let edges = zipWith3 makeEdge verticesV1 verticesV2 colCost
     return edges
     
-readConnections :: String -> M.Map Int Vertex -> IO [Connection]
+readConnections :: String -> VertexMap -> IO [Connection]
 readConnections path verticesMap = do
     header:rows <- readCSVFile path
     let colV1 = getCol "v1" header rows

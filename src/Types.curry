@@ -4,6 +4,14 @@ import Data.List
 import Data.Maybe
 import qualified Data.Map as M
 
+
+type VertexMap = M.Map Int Vertex
+
+buildVertexMap :: [Vertex] -> VertexMap
+buildVertexMap vertices = M.fromList $ map (\v -> (vertexID v, v)) vertices
+findVertexUnsafe :: VertexMap -> Int -> Vertex
+findVertexUnsafe vm voi = fromJust $ M.lookup voi vm
+
 type AdjacencyMap = M.Map Vertex [Vertex]
 
 buildAdjacencyMap :: [Edge] -> AdjacencyMap
@@ -53,7 +61,12 @@ data Connection = Connection Vertex Vertex Float -- v1 v2 sum_cost
 makeConnection :: Vertex -> Vertex -> String -> Connection
 makeConnection v1 v2 sumCost = Connection v1 v2 (read sumCost)
 
-data Vertex = Vertex Int Float Float Bool -- v long lat focal
+data Vertex = Vertex {
+      vertexID :: Int
+    , vertexLong :: Float
+    , vertexLat :: Float
+    , vertexFocal :: Bool
+    } -- v long lat focal
 instance Show Vertex where
     show (Vertex v _ _ _) = show v
 instance Eq Vertex where
@@ -62,8 +75,6 @@ instance Ord Vertex where
   compare (Vertex v1 _ _ _) (Vertex v2 _ _ _) = compare v1 v2
 makeVertex :: String -> String -> String -> String -> Vertex
 makeVertex v long lat focal = Vertex (read v) (read long) (read lat) (read focal)
-findVertexUnsafe :: M.Map Int Vertex -> Int -> Vertex
-findVertexUnsafe m voi = fromJust $ M.lookup voi m
 
 distHaversine :: Vertex -> Vertex -> Float
 distHaversine (Vertex _ long1 lat1 _) (Vertex _ long2 lat2 _) =
