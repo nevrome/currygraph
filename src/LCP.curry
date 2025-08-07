@@ -22,11 +22,11 @@ runLCP :: LCPOptions -> IO ()
 runLCP (LCPOptions vertFile edgeFile connectionFile outFile) = do
     putStrLn "Reading data..."
     vertices <- readVertices vertFile
-    let verticesMap = M.fromList $ map (\v@(Vertex v1 _ _ _) -> (v1,v)) vertices
+    let vm = buildVertexMap vertices
     putStrLn $ "Vertices: " ++ show (length vertices)
-    edges <- readEdges edgeFile verticesMap
+    edges <- readEdges edgeFile vm
     putStrLn $ "Edges: " ++ show (length edges)
-    connections <- readConnections connectionFile verticesMap
+    connections <- readConnections connectionFile vm
     putStrLn $ "Connections: " ++ show (length connections)
     putStrLn "Searching..."
     h <- openFile outFile WriteMode
@@ -78,7 +78,7 @@ findBestPath edges start end sumCost = do
             return maybeBestPath
     where
         isEndStillReachable :: Vertex -> [Action] -> Bool
-        isEndStillReachable (Vertex v _ _ _) actions = any (\(Action _ (Vertex v2 _ _ _) _) -> v == v2) actions
+        isEndStillReachable (Vertex v _ _ ) actions = any (\(Action _ (Vertex v2 _ _ ) _) -> v == v2) actions
 
 generatePaths :: [Action] -> S.Set Vertex ->  Vertex -> Vertex -> Int -> Float -> [Action] -> [[Action]]
 generatePaths allActions visited current end steps cost acc

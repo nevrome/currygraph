@@ -14,8 +14,7 @@ readVertices path = do
     let colID = getCol "id" header rows
         colLong = getCol "long" header rows
         colLat = getCol "lat" header rows
-        colFocal = getCol "focal" header rows
-    let vertices = zipWith4 makeVertex colID colLong colLat colFocal
+    let vertices = zipWith3 makeVertex colID colLong colLat
     return vertices
 
 zipWith4 :: (a -> b -> c -> d -> e) -> [a] -> [b] -> [c] -> [d] -> [e]

@@ -65,19 +65,18 @@ data Vertex = Vertex {
       vertexID :: Int
     , vertexLong :: Float
     , vertexLat :: Float
-    , vertexFocal :: Bool
-    } -- v long lat focal
+    }
 instance Show Vertex where
-    show (Vertex v _ _ _) = show v
+    show (Vertex v _ _ ) = show v
 instance Eq Vertex where
-    (Vertex v1 _ _ _) == (Vertex v2 _ _ _) = v1 == v2
+    (Vertex v1 _ _ ) == (Vertex v2 _ _ ) = v1 == v2
 instance Ord Vertex where
-  compare (Vertex v1 _ _ _) (Vertex v2 _ _ _) = compare v1 v2
-makeVertex :: String -> String -> String -> String -> Vertex
-makeVertex v long lat focal = Vertex (read v) (read long) (read lat) (read focal)
+  compare (Vertex v1 _ _ ) (Vertex v2 _ _ ) = compare v1 v2
+makeVertex :: String -> String -> String -> Vertex
+makeVertex v long lat = Vertex (read v) (read long) (read lat)
 
 distHaversine :: Vertex -> Vertex -> Float
-distHaversine (Vertex _ long1 lat1 _) (Vertex _ long2 lat2 _) =
+distHaversine (Vertex _ long1 lat1) (Vertex _ long2 lat2) =
     sqrt ((long1 - long2)^2 + (lat1 - lat2)^2)
     --let r = 6371000  -- radius of Earth in metres
     --    toRadians n = n * pi / 180

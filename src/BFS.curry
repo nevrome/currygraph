@@ -13,12 +13,13 @@ import System.IO
 data BFSOptions = BFSOptions {
       bfsVertFile :: String
     , bfsEdgeFile :: String
+    , bfsDestFile :: String
     , bfsMinNrDestinations :: Int
     , bfsOutFile :: String
 } deriving Show
 
 runBFS :: BFSOptions -> IO ()
-runBFS (BFSOptions vertFile edgeFile minNrDests outFile) = do
+runBFS (BFSOptions vertFile edgeFile destFile minNrDests outFile) = do
     putStrLn "Reading data..."
     vertices <- readVertices vertFile
     let vm = buildVertexMap vertices
@@ -28,8 +29,9 @@ runBFS (BFSOptions vertFile edgeFile minNrDests outFile) = do
     putStrLn "Building adjacency map..."
     let adj = buildAdjacencyMap edges
     putStrLn $ "Size adjacency map: " ++ show (M.size adj) -- to force evaluation
-    let verticesDest = filter (\(Vertex _ _ _ f) -> f) vertices
-        verticesDestSet = S.fromList verticesDest
+    verticesDest <- readVertices destFile
+    let verticesDestSet = S.fromList verticesDest
+    putStrLn $ "Destination vertices: " ++ show (length verticesDest)
     putStrLn "Searching..."
     h <- openFile outFile WriteMode
     hPutStrLn h "v1,v2,sum_cost" -- csv header

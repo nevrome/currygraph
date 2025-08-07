@@ -28,7 +28,7 @@ lcpOpts s = case com s of
 bfsOpts :: Options -> BFSOptions
 bfsOpts s = case com s of
   BFS opts -> opts
-  _        -> BFSOptions "" "" 6 ""
+  _        -> BFSOptions "" "" "" 6 ""
 
 applyEither :: [Options -> Either String Options] -> Options -> Either String Options
 applyEither [] z = Right z
@@ -41,6 +41,12 @@ applyParse fs = applyEither fs defaultOptions
 docVertFile :: OP.Mod
 docVertFile = OP.long "vertFile"
               OP.<> OP.short "v"
+              OP.<> OP.metavar "PATH"
+              OP.<> OP.help "..."
+
+docDestFile :: OP.Mod
+docDestFile = OP.long "destFile"
+              OP.<> OP.short "d"
               OP.<> OP.metavar "PATH"
               OP.<> OP.help "..."
 
@@ -80,6 +86,7 @@ cmdParser = OP.optParser $
             (\a -> Right $ a { com = BFS (bfsOpts a) }) (
                 OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsVertFile = s}}) docVertFile
             <.> OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsEdgeFile = s}}) docEdgeFile
+            <.> OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsDestFile = s}}) docDestFile
             <.> OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsMinNrDestinations = read s}}) docMinDests
             <.> OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsOutFile = s}}) docOutFile
         )
