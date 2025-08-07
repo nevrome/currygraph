@@ -23,7 +23,7 @@ runLCP (LCPOptions vertFile edgeFile connectionFile outFile) = do
     putStrLn "Reading data..."
     vertices <- readVertices vertFile
     let vm = buildVertexMap vertices
-    putStrLn $ "Vertices: " ++ show (length vertices)
+    putStrLn $ "Vertices: " ++ show (M.size vm)
     edges <- readEdges edgeFile vm
     putStrLn $ "Edges: " ++ show (length edges)
     connections <- readConnections connectionFile vm

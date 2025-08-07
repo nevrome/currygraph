@@ -24,7 +24,7 @@ runBFS (BFSOptions vertFile edgeFile destFile minNrDests stopAtDests outFile) = 
     putStrLn "Reading data..."
     vertices <- readVertices vertFile
     let vm = buildVertexMap vertices
-    putStrLn $ "Vertices: " ++ show (length vertices)
+    putStrLn $ "Vertices: " ++ show (M.size vm)
     edges <- readEdges edgeFile vm
     putStrLn $ "Edges: " ++ show (length edges)
     putStrLn "Building adjacency map..."
@@ -32,7 +32,7 @@ runBFS (BFSOptions vertFile edgeFile destFile minNrDests stopAtDests outFile) = 
     putStrLn $ "Size adjacency map: " ++ show (M.size adj) -- to force evaluation
     verticesDest <- readVertices destFile
     let verticesDestSet = S.fromList verticesDest
-    putStrLn $ "Destination vertices: " ++ show (length verticesDest)
+    putStrLn $ "Destination vertices: " ++ show (S.size verticesDestSet)
     putStrLn "Searching..."
     h <- openFile outFile WriteMode
     hPutStrLn h "v1,v2,sum_cost" -- csv header
