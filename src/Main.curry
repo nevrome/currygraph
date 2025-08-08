@@ -63,7 +63,17 @@ docDeleteUsedEdges = OP.long "deleteUsedEdges"
 
 docMaxNrBranches :: OP.Mod
 docMaxNrBranches = OP.long "maxNrBranches"
-            OP.<> OP.metavar "Int"
+            OP.<> OP.metavar "INT"
+            OP.<> OP.help "..."
+
+docCostThresholdAbs :: OP.Mod
+docCostThresholdAbs = OP.long "absCostThreshold"
+            OP.<> OP.metavar "FLOAT"
+            OP.<> OP.help "..."
+
+docCostThresholdRel :: OP.Mod
+docCostThresholdRel = OP.long "relCostThreshold"
+            OP.<> OP.metavar "FLOAT"
             OP.<> OP.help "..."
 
 docUpdateCostThreshold :: OP.Mod
@@ -73,7 +83,8 @@ docUpdateCostThreshold = OP.long "updateCostThreshold"
 lcpOpts :: Options -> LCPOptions
 lcpOpts s = case com s of
   LCP opts -> opts
-  _        -> LCPOptions "" "" "" False 1000 False ""
+  _        -> LCPOptions "" "" ""
+                         False 1000 None False ""
 
 -- only bfs
 
@@ -106,6 +117,11 @@ cmdParser = OP.optParser $
             <.> OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpConnectionFile = s}}) docConnectionFile
             <.> OP.flag (\a -> Right $ a {com = LCP (lcpOpts a) {lcpDeleteUsedEdges = True}}) docDeleteUsedEdges
             <.> OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpMaxNrBranches = read s}}) docMaxNrBranches
+            <.>
+            (
+            OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpCostThreshold = Absolute $ read s}}) docCostThresholdAbs
+            <|> OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpCostThreshold = Relative $ read s}}) docCostThresholdRel
+            )
             <.> OP.flag (\a -> Right $ a {com = LCP (lcpOpts a) {lcpUpdateCostThreshold = True}}) docUpdateCostThreshold
             <.> OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpOutFile = s}}) docOutFile
         ) OP.<|>
