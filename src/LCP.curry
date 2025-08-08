@@ -120,7 +120,7 @@ generatePaths allActions maxNrBranches updateCostThreshold end visited current c
   where
       -- pruning mechanism
       validActions :: [Action]
-      validActions = sortBySpatialDistToDest end $ filter checkAction allActions
+      validActions = take 3 $ sortBySpatialDistToDest end $ filter checkAction allActions
       checkAction :: Action -> Bool
       checkAction a =
           isFromCurV a &&

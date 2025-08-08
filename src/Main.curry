@@ -164,7 +164,7 @@ cmdParser = OP.optParser $
             <.> parseConnectionFile
             <.> parseDeleteUsedEdges
             <.> parseMaxNrBranches
-            <.> (parseCostThresholdAbs <|> parseCostThresholdRel)
+            <.> (parseCostThresholdAbs OP.<|> parseCostThresholdRel)
             <.> parseUpdateCostThreshold
             <.> parseOutFileLCP
         ) OP.<|>
