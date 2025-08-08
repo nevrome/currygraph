@@ -66,10 +66,14 @@ docMaxNrBranches = OP.long "maxNrBranches"
             OP.<> OP.metavar "Int"
             OP.<> OP.help "..."
 
+docUpdateCostThreshold :: OP.Mod
+docUpdateCostThreshold = OP.long "updateCostThreshold"
+            OP.<> OP.help "..."
+
 lcpOpts :: Options -> LCPOptions
 lcpOpts s = case com s of
   LCP opts -> opts
-  _        -> LCPOptions "" "" "" False 1000 ""
+  _        -> LCPOptions "" "" "" False 1000 False ""
 
 -- only bfs
 
@@ -102,6 +106,7 @@ cmdParser = OP.optParser $
             <.> OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpConnectionFile = s}}) docConnectionFile
             <.> OP.flag (\a -> Right $ a {com = LCP (lcpOpts a) {lcpDeleteUsedEdges = True}}) docDeleteUsedEdges
             <.> OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpMaxNrBranches = read s}}) docMaxNrBranches
+            <.> OP.flag (\a -> Right $ a {com = LCP (lcpOpts a) {lcpUpdateCostThreshold = True}}) docUpdateCostThreshold
             <.> OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpOutFile = s}}) docOutFile
         ) OP.<|>
         OP.command "bfs" (OP.help "...")

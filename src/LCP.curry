@@ -17,11 +17,17 @@ data LCPOptions = LCPOptions {
     , lcpConnectionFile :: String
     , lcpDeleteUsedEdges :: Bool
     , lcpMaxNrBranches :: Int
+    , lcpUpdateCostThreshold :: Bool
     , lcpOutFile :: String
 } deriving Show
 
 runLCP :: LCPOptions -> IO ()
-runLCP (LCPOptions vertFile edgeFile connectionFile deleteUsed maxNrBranches outFile) = do
+runLCP (
+    LCPOptions
+    vertFile edgeFile connectionFile
+    deleteUsed maxNrBranches updateCostThreshold
+    outFile
+    ) = do
     putStrLn "Reading data..."
     vertices <- readVertices vertFile
     let vm = buildVertexMap vertices
@@ -35,22 +41,23 @@ runLCP (LCPOptions vertFile edgeFile connectionFile deleteUsed maxNrBranches out
     putStrLn "Searching..."
     h <- openFile outFile WriteMode
     hPutStrLn h "v1,v2,initial_sum_cost,path" -- csv header
-    pathForConnections h actions connections deleteUsed maxNrBranches
+    pathForConnections h actions connections deleteUsed maxNrBranches updateCostThreshold
     hFlush h
     hClose h
     putStrLn "Done"
 
-pathForConnections :: Handle -> [Action] -> [Connection] -> Bool -> Int -> IO ()
-pathForConnections _ _ [] _ _ = return ()
-pathForConnections h allActions (con@(Connection v1 v2 sumCost):xs) deleteUsed maxNrBranches = do
-    path <- findBestPath allActions v1 v2 sumCost maxNrBranches
+pathForConnections :: Handle -> [Action] -> [Connection] -> Bool -> Int -> Bool -> IO ()
+pathForConnections _ _ [] _ _ _ = return ()
+pathForConnections h allActions (con@(Connection v1 v2 sumCost):xs)
+                   deleteUsed maxNrBranches updateCostThreshold = do
+    path <- findBestPath allActions v1 v2 sumCost maxNrBranches updateCostThreshold
     writeConnectionResult h con path
     let remainingActions = case deleteUsed of
             True -> case path of
                 Nothing -> allActions
                 Just actions -> filterActions allActions actions
             False -> allActions
-    pathForConnections h remainingActions xs deleteUsed maxNrBranches
+    pathForConnections h remainingActions xs deleteUsed maxNrBranches updateCostThreshold
 
 writeConnectionResult :: Handle -> Connection -> Maybe [Action] -> IO ()
 writeConnectionResult h (Connection v1 v2 sumCost) maybeActions = do
@@ -67,35 +74,36 @@ actionsToPath [] = []
 actionsToPath (x:xs) = nub ([getV1 x, getV2 x] ++ (actionsToPath xs))
 
 -- global mutable variable to keep track of the cheapest path already discovered
-minCostDiscovered :: GlobalT Float
-minCostDiscovered = globalT "Main.minCostDiscovered" 0
+costThreshold :: GlobalT Float
+costThreshold = globalT "Main.costThreshold" 0
 branchesExplored :: GlobalT Int
 branchesExplored = globalT "Main.branchesExplored" 0
 
-findBestPath :: [Action] -> Vertex -> Vertex -> Float -> Int -> IO (Maybe [Action])
-findBestPath actions start end sumCost maxNrBranches = do
-    writeGlobalT minCostDiscovered (sumCost*1.5)
+findBestPath :: [Action] -> Vertex -> Vertex -> Float -> Int -> Bool -> IO (Maybe [Action])
+findBestPath actions start end sumCost maxNrBranches updateCostThreshold = do
+    writeGlobalT costThreshold (sumCost*1.5)
     writeGlobalT branchesExplored 0
     case isEndStillReachable end actions of
         False -> return Nothing
         True -> do
-            maybeBestPath <- getOneValue $ head $ sortByCost $ generatePaths actions maxNrBranches end S.empty start 0 []
+            maybeBestPath <- getOneValue $ head $ sortByCost $ generatePaths actions maxNrBranches updateCostThreshold end S.empty start 0 []
             return maybeBestPath
     where
         isEndStillReachable :: Vertex -> [Action] -> Bool
         isEndStillReachable (Vertex v _ _ ) actions = any (\(Action _ (Vertex v2 _ _ ) _) -> v == v2) actions
 
-generatePaths :: [Action] -> Int -> Vertex -> S.Set Vertex -> Vertex -> Float -> [Action] -> [[Action]]
-generatePaths allActions maxNrBranches end visited current cost acc
-    | current == end =
+generatePaths :: [Action] -> Int -> Bool -> Vertex -> S.Set Vertex -> Vertex -> Float -> [Action] -> [[Action]]
+generatePaths allActions maxNrBranches updateCostThreshold end visited current cost acc
+    | current == end && updateCostThreshold =
         let update = unsafePerformIO $ do
-                writeGlobalT minCostDiscovered cost
+                writeGlobalT costThreshold cost
                 return ()
         in update `seq` [reverse acc]
+    | current == end = [reverse acc]
     | otherwise = do
         action <- validActions
         generatePaths
-            allActions maxNrBranches end
+            allActions maxNrBranches updateCostThreshold end
             (S.insert current visited) (getV2 action)
             (cost + getCost action)
             (action:acc)
@@ -107,15 +115,15 @@ generatePaths allActions maxNrBranches end visited current cost acc
       checkAction a =
           isFromCurV a &&
           isNotVisited a &&
-          isCostAboveMinCostDiscovered a &&
+          isCostAboveCostThreshold a &&
           isBelowBranchLimit
       isFromCurV :: Action -> Bool
       isFromCurV (Action v1 _ _) = v1 == current
       isNotVisited :: Action -> Bool
       isNotVisited (Action _ v2 _) =  not $ S.member v2 visited
-      isCostAboveMinCostDiscovered :: Action -> Bool
-      isCostAboveMinCostDiscovered (Action _ _ c) =
-          let previousMinCost = unsafePerformIO $! readGlobalT minCostDiscovered
+      isCostAboveCostThreshold :: Action -> Bool
+      isCostAboveCostThreshold (Action _ _ c) =
+          let previousMinCost = unsafePerformIO $! readGlobalT costThreshold
           in (cost + c) < previousMinCost
       isBelowBranchLimit :: Bool
       isBelowBranchLimit =
