@@ -89,7 +89,7 @@ findBestPath :: [Action] -> Vertex -> Vertex
                 -> Bool -> IO (Maybe [Action])
 findBestPath actions start end sumCost maxNrBranches costThreshold updateCostThreshold = do
     case costThreshold of
-        None -> writeGlobalT currentCostThreshold (1.0/0.0)
+        None -> writeGlobalT currentCostThreshold infinity
         Absolute x -> writeGlobalT currentCostThreshold x
         Relative x -> writeGlobalT currentCostThreshold (sumCost*x)
     writeGlobalT branchesExplored 0

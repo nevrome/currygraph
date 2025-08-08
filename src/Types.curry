@@ -4,6 +4,8 @@ import Data.List
 import Data.Maybe
 import qualified Data.Map as M
 
+infinity :: Float
+infinity = 1.0 / 0.0
 
 type VertexMap = M.Map Int Vertex
 

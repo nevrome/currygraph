@@ -1,8 +1,7 @@
 # currygraph
 
-currygraph is a small command line tool for specific path searches on (triangular) graphs.
-At the moment it's solely developed for my own needs, though I may extend it in the future for more
-general applications.
+currygraph is a small command line tool for specific path searches on spatial graphs.
+At the moment it's solely developed for my own needs, though I may extend it in the future for more general applications.
 
 It is written in the functional logic programming language [curry](https://curry-lang.org/).
 
