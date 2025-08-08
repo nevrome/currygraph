@@ -120,6 +120,8 @@ generatePaths allActions maxNrBranches updateCostThreshold end visited current c
   where
       -- pruning mechanism
       validActions :: [Action]
+      -- TODO: add optional pruning by destVert like in BFS: Paths through other destinations can be omitted
+      -- TODO: make beam search an optional setting
       validActions = take 3 $ sortBySpatialDistToDest end $ filter checkAction allActions
       checkAction :: Action -> Bool
       checkAction a =
