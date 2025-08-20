@@ -20,6 +20,7 @@ data LCPOptions = LCPOptions {
     , lcpCostThreshold :: CostThreshold
     , lcpUpdateCostThreshold :: Bool
     , lcpOutFile :: String
+    , lcpVerbose :: Bool
 } deriving Show
 
 data CostThreshold = None | Absolute Float | Relative Float
@@ -30,7 +31,7 @@ runLCP (
     LCPOptions
     vertFile edgeFile connectionFile
     deleteUsed maxNrBranches costThreshold updateCostThreshold
-    outFile
+    outFile verbose
     ) = do
     putStrLn "Reading data..."
     vertices <- readVertices vertFile
@@ -45,16 +46,21 @@ runLCP (
     putStrLn "Searching..."
     h <- openFile outFile WriteMode
     hPutStrLn h "v1,v2,initial_sum_cost,path" -- csv header
-    pathForConnections h actions connections deleteUsed maxNrBranches costThreshold updateCostThreshold
+    pathForConnections h actions connections deleteUsed maxNrBranches costThreshold updateCostThreshold verbose
     hFlush h
     hClose h
     putStrLn "Done"
 
-pathForConnections :: Handle -> [Action] -> [Connection] -> Bool -> Int -> CostThreshold -> Bool -> IO ()
-pathForConnections _ _ [] _ _ _ _ = return ()
+pathForConnections :: Handle -> [Action] -> [Connection] -> Bool -> Int -> CostThreshold -> Bool -> Bool -> IO ()
+pathForConnections _ _ [] _ _ _ _ _ = return ()
 pathForConnections h allActions (con@(Connection v1 v2 sumCost):xs)
                    deleteUsed maxNrBranches
-                   costThreshold updateCostThreshold = do
+                   costThreshold updateCostThreshold verbose = do
+    case verbose of
+        True -> do
+            putStrLn $ show con
+            hFlush stdout
+        False -> return ()
     path <- findBestPath allActions v1 v2 sumCost maxNrBranches costThreshold updateCostThreshold
     writeConnectionResult h con path
     let remainingActions = case deleteUsed of
@@ -62,7 +68,7 @@ pathForConnections h allActions (con@(Connection v1 v2 sumCost):xs)
                 Nothing -> allActions
                 Just actions -> filterActions allActions actions
             False -> allActions
-    pathForConnections h remainingActions xs deleteUsed maxNrBranches costThreshold updateCostThreshold
+    pathForConnections h remainingActions xs deleteUsed maxNrBranches costThreshold updateCostThreshold verbose
 
 writeConnectionResult :: Handle -> Connection -> Maybe [Action] -> IO ()
 writeConnectionResult h (Connection v1 v2 sumCost) maybeActions = do

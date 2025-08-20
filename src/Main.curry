@@ -77,6 +77,15 @@ parseOutFileLCP =
 parseOutFileBFS =
     OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsOutFile = s}}) docOutFile
 
+docVerbose :: OP.Mod
+docVerbose = OP.long "verbose"
+             OP.<> OP.short "v"
+             OP.<> OP.help "Should the CLI output be more informative? Default: False."
+parseVerboseLCP =
+    OP.flag (\a -> Right $ a {com = LCP (lcpOpts a) {lcpVerbose = True}}) docVerbose
+--parseOutFileBFS =
+--    OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsOutFile = s}}) docOutFile
+
 -- only lcp
 
 docConnectionFile :: OP.Mod
@@ -167,6 +176,7 @@ cmdParser = OP.optParser $
             <.> (parseCostThresholdAbs OP.<|> parseCostThresholdRel)
             <.> parseUpdateCostThreshold
             <.> parseOutFileLCP
+            <.> parseVerboseLCP
         ) OP.<|>
         OP.command "bfs" (OP.help "Breadth-first search for the n-nearest neighbors on a graph \
                                   \between a list of destination vertices.")
@@ -184,7 +194,7 @@ cmdParser = OP.optParser $
 lcpOpts :: Options -> LCPOptions
 lcpOpts s = case com s of
   LCP opts -> opts
-  _        -> LCPOptions "" "" "" False 1000 None False ""
+  _        -> LCPOptions "" "" "" False 1000 None False "" False
 bfsOpts :: Options -> BFSOptions
 bfsOpts s = case com s of
   BFS opts -> opts
