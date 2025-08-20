@@ -61,25 +61,29 @@ pathForConnections h allActions (con@(Connection v1 v2 sumCost):xs)
             putStrLn $ show con
             hFlush stdout
         False -> return ()
-    path <- findBestPath allActions v1 v2 sumCost maxNrBranches costThreshold updateCostThreshold
-    writeConnectionResult h con path
+    paths <- findBestPath allActions v1 v2 sumCost maxNrBranches costThreshold updateCostThreshold
+    writeConnectionResult h con paths
     let remainingActions = case deleteUsed of
-            True -> case path of
+            True -> case paths of
                 Nothing -> allActions
-                Just actions -> filterActions allActions actions
+                Just actions -> filterActions allActions $ concat actions
             False -> allActions
     pathForConnections h remainingActions xs deleteUsed maxNrBranches costThreshold updateCostThreshold verbose
 
-writeConnectionResult :: Handle -> Connection -> Maybe [Action] -> IO ()
-writeConnectionResult h (Connection v1 v2 sumCost) maybeActions = do
-    let pathString = case maybeActions of
-            Nothing -> "NA"
-            Just actions ->
-                let vertices = actionsToPath actions
-                in intercalate ";" $ map show vertices
-        row = intercalate "," [show v1, show v2, show sumCost, pathString]
-    hPutStrLn h row
+writeConnectionResult :: Handle -> Connection -> Maybe [[Action]] -> IO ()
+writeConnectionResult h (Connection v1 v2 sumCost) maybePaths = do
+    let pathStrings = case maybePaths of
+            Nothing -> ["NA"]
+            Just paths -> pathsToStrings paths
+        rows = map (\ps -> intercalate "," [show v1, show v2, show sumCost, ps]) pathStrings
+    mapM_ (hPutStrLn h) rows
 
+pathsToStrings :: [[Action]] -> [String]
+pathsToStrings = map pathToString 
+pathToString :: [Action] -> String
+pathToString actions =
+    let vertices = actionsToPath actions
+    in intercalate ";" $ map show vertices
 actionsToPath :: [Action] -> [Vertex]
 actionsToPath [] = []
 actionsToPath (x:xs) = nub ([getV1 x, getV2 x] ++ (actionsToPath xs))
@@ -92,7 +96,7 @@ branchesExplored = globalT "Main.branchesExplored" 0
 
 findBestPath :: [Action] -> Vertex -> Vertex
                 -> Float -> Int -> CostThreshold
-                -> Bool -> IO (Maybe [Action])
+                -> Bool -> IO (Maybe [[Action]])
 findBestPath actions start end sumCost maxNrBranches costThreshold updateCostThreshold = do
     case costThreshold of
         None -> writeGlobalT currentCostThreshold infinity
@@ -102,7 +106,7 @@ findBestPath actions start end sumCost maxNrBranches costThreshold updateCostThr
     case isEndStillReachable end actions of
         False -> return Nothing
         True -> do
-            maybeBestPath <- getOneValue $ head $ sortByCost $ generatePaths actions maxNrBranches updateCostThreshold end S.empty start 0 []
+            maybeBestPath <- getOneValue $ take 1 $ sortByCost $ generatePaths actions maxNrBranches updateCostThreshold end S.empty start 0 []
             return maybeBestPath
     where
         isEndStillReachable :: Vertex -> [Action] -> Bool
