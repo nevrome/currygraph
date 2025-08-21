@@ -94,16 +94,22 @@ dijkstra :: AdjacencyMap -> Vertex -> Vertex -> Maybe Path
 dijkstra adj start end = go [(start,0,[start])] S.empty
   where
     go [] _ = Nothing
-    go ((vertex,curCost,curPath):queue) visited
-      | vertex == end = Just (reverse curPath, curCost)
-      | vertex `S.member` visited = go queue visited
+    go ((curPos,curCost,curPath):queue) visited
+      | curPos == end = Just (reverse curPath, curCost)
+      | curPos `S.member` visited = go queue visited
       | otherwise =
-          let neighbors      = getNeighborsWithCost adj vertex
-              updatedQueue   = foldl (\accQueue (neighborVertex,edgeWeight) ->
-                                        if neighborVertex `S.member` visited
-                                        then accQueue
-                                        else insertBy (\(_,c1,_) (_,c2,_) -> c1 < c2)
-                                                       (neighborVertex,curCost+edgeWeight,neighborVertex:curPath)
-                                                       accQueue)
-                                     queue neighbors
-          in go updatedQueue (S.insert vertex visited)
+          let neighbors    = getNeighborsWithCost adj curPos
+              updatedQueue = foldl updateQueueEntry queue neighbors
+          in go updatedQueue (S.insert curPos visited)
+          where
+              updateQueueEntry :: [(Vertex,Float,[Vertex])] -> (Vertex,Float) -> [(Vertex,Float,[Vertex])]
+              updateQueueEntry accQueue (neighborVertex, edgeWeight)
+                | neighborVertex `S.member` visited = accQueue
+                | otherwise = insertBy (\(_,c1,_) (_,c2,_) -> c1 < c2)
+                                       (neighborVertex, curCost+edgeWeight, neighborVertex:curPath)
+                                       accQueue
+
+
+
+
+
