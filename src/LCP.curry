@@ -8,6 +8,7 @@ import Data.List
 import Data.Maybe (fromJust)
 import qualified Data.Map as M
 import qualified Data.Set as S
+import Control.Search.AllValues
 
 data LCPOptions = LCPOptions {
       lcpVertFile :: String
@@ -45,7 +46,11 @@ pathsForConnections :: Handle -> AdjacencyMap -> [Connection] -> IO ()
 pathsForConnections h adj cons = do
     let nPaths = 3  -- how many shortest paths per connection
     --mapM_ (\(Connection v1 v2 _) ->  mapM_ (writePath h v1 v2) (yen adj v1 v2 nPaths)) cons
-    mapM_ (\(Connection v1 v2 _) ->  mapM_ (writePath h v1 v2) [fromJust $ dijkstra adj v1 v2]) cons
+    mapM_ (\(Connection v1 v2 _) -> do
+        allPaths <- fromJust <$> getOneValue (yen adj v1 v2 nPaths)
+        mapM_ (writePath h v1 v2) allPaths
+      ) cons
+    --mapM_ (\(Connection v1 v2 _) ->  mapM_ (writePath h v1 v2) [fromJust $ dijkstra adj v1 v2]) cons
 
 writePath :: Handle -> Vertex -> Vertex -> Path -> IO ()
 writePath h v1 v2 (vs,cost) =
@@ -61,14 +66,13 @@ yen adj start end maxPaths =
   where
     loop pathResults _ count | count >= maxPaths = pathResults
     loop pathResults candidatePaths count =
-      let prevPath       = pathResults !! (count-1)
-          spurCandidates = concatMap (spurPaths prevPath pathResults) [0 .. length (fst prevPath) - 2]
-          allCandidates  = nubBy (\(verts1,_) (verts2,_) -> verts1 == verts2) (candidatePaths ++ spurCandidates)
-          sortedCands    = sortBy (\(_,cost1) (_,cost2) -> cost1 < cost2) allCandidates
+      let prevPath    = pathResults !! (count-1)
+          spurCands   = concatMap (spurPaths prevPath pathResults) [0 .. length (fst prevPath) - 2]
+          allCands    = nubBy (\(vs1,_) (vs2,_) -> vs1 == vs2) (candidatePaths ++ spurCands)
+          sortedCands = sortBy (\(_,cost1) (_,cost2) -> cost1 < cost2) allCands
       in case sortedCands of
            []              -> pathResults
            (bestPath:rest) -> loop (pathResults ++ [bestPath]) rest (count+1)
-
     spurPaths (pathVertices,_) existingResults spurIndex =
       let rootPathVertices = take (spurIndex+1) pathVertices
           spurNode         = last rootPathVertices
@@ -76,19 +80,18 @@ yen adj start end maxPaths =
                              | (path,_) <- existingResults
                              , take (spurIndex+1) path == rootPathVertices
                              ]
-          prunedAdj        = foldl (\m (vFrom,vTo) -> remE vTo vFrom (remE vFrom vTo m))
-                                   adj removedEdges
+          prunedAdj        = foldl (\m (vFrom,vTo) -> remE vTo vFrom (remE vFrom vTo m)) adj removedEdges
       in case dijkstra prunedAdj spurNode end of
            Nothing -> []
            Just (spurVertices, spurCost) ->
              let totalPathVertices = rootPathVertices ++ tail spurVertices
                  totalPathCost     = pathCost rootPathVertices + spurCost
              in [(totalPathVertices, totalPathCost)]
-
-    remE vertex1 vertex2 = M.adjust (filter ((/= vertex2) . fst)) vertex1
+    remE v1 v2 = M.adjust (filter ((/= v2) . fst)) v1
     pathCost verts = sum [ cost
                          | (vFrom,vTo) <- zip verts (tail verts)
-                         , Just cost   <- [lookup vTo (M.findWithDefault [] vFrom adj)] ]
+                         , Just cost   <- [lookup vTo (M.findWithDefault [] vFrom adj)]
+                         ]
 
 dijkstra :: AdjacencyMap -> Vertex -> Vertex -> Maybe Path
 dijkstra adj start end = go [(start,0,[start])] S.empty
