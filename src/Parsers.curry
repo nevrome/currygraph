@@ -12,9 +12,7 @@ readVertices :: String -> IO [Vertex]
 readVertices path = do
     header:rows <- readCSVFile path
     let colID = getCol "id" header rows
-        colLong = getCol "long" header rows
-        colLat = getCol "lat" header rows
-    let vertices = zipWith3 makeVertex colID colLong colLat
+    let vertices = map makeVertex colID
     return vertices
 
 zipWith4 :: (a -> b -> c -> d -> e) -> [a] -> [b] -> [c] -> [d] -> [e]

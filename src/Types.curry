@@ -7,93 +7,45 @@ import qualified Data.Map as M
 infinity :: Float
 infinity = 1.0 / 0.0
 
+type Path = ([Vertex], Float)
+
 type VertexMap = M.Map Int Vertex
 
 buildVertexMap :: [Vertex] -> VertexMap
-buildVertexMap vertices = M.fromList $ map (\v -> (vertexID v, v)) vertices
+buildVertexMap vertices = M.fromList $ map (\v@(Vertex i) -> (i, v)) vertices
 findVertexUnsafe :: VertexMap -> Int -> Vertex
 findVertexUnsafe vm voi = fromJust $ M.lookup voi vm
 
-type AdjacencyMap = M.Map Vertex [Vertex]
+type AdjacencyMap = M.Map Vertex [(Vertex, Float)] -- (neighboring vertex, float)
 
 buildAdjacencyMap :: [Edge] -> AdjacencyMap
 buildAdjacencyMap es = foldl addEdge M.empty es
   where
-    addEdge m (Edge v1 v2 _) = M.insertWith (++) v1 [v2] $ M.insertWith (++) v2 [v1] m
+    addEdge m (Edge v1 v2 c) = M.insertWith (++) v1 [(v2,c)] $ M.insertWith (++) v2 [(v1,c)] m
 
 getNeighbors :: AdjacencyMap -> Vertex -> [Vertex]
-getNeighbors adj v = M.findWithDefault [] v adj
+getNeighbors adj v = map fst $ M.findWithDefault [] v adj
+getNeighborsWithCost :: AdjacencyMap -> Vertex -> [(Vertex,Float)]
+getNeighborsWithCost adj v = M.findWithDefault [] v adj
+
 
 data Edge = Edge Vertex Vertex Float -- v1 v2 cost
     deriving (Show, Eq)
 makeEdge :: Vertex -> Vertex -> String -> Edge
 makeEdge v1 v2 cost = Edge v1 v2 (read cost)
 
-filterEgdesByActions :: [Edge] -> [Action] -> [Edge]
-filterEgdesByActions edges actions = filter (\e -> not $ isEdgeUsedByAnyAction e actions) edges
-isEdgeUsedByAnyAction :: Edge -> [Action] -> Bool
-isEdgeUsedByAnyAction edge actions = any (isEdgeUsedByAction edge) actions
-isEdgeUsedByAction :: Edge -> Action -> Bool
-isEdgeUsedByAction (Edge ev1 ev2 _) (Action av1 av2 _) = (ev1 == av1 && ev2 == av2) || (ev1 == av2 && ev2 == av1)
-
-data Action = Action Vertex Vertex Float -- v1 v2 cost
-    deriving (Show, Eq)
-edgeToActions :: Edge -> [Action]
-edgeToActions (Edge v1 v2 cost) = [Action v1 v2 cost, Action v2 v1 cost]
-getV1 :: Action -> Vertex
-getV1 (Action v1 _ _) = v1
-getV2 :: Action -> Vertex
-getV2 (Action _ v2 _) = v2
-getCost :: Action -> Float
-getCost (Action _ _ c) = c
-sumCosts :: [Action] -> Float
-sumCosts xs = sum $ map getCost xs
-minByCost :: [[Action]] -> [Action]
-minByCost xss = minimumBy (\xs ys -> compare (sumCosts xs) (sumCosts ys)) xss
-sortByCost :: [[Action]] -> [[Action]]
-sortByCost xss = sortBy (\xs ys -> sumCosts xs < sumCosts ys) xss
-
-filterActions :: [Action] -> [Action] -> [Action]
-filterActions all toRemove = filter (\a -> not $ isActionUsedByAny a toRemove) all
-isActionUsedByAny :: Action -> [Action] -> Bool
-isActionUsedByAny a toRemove = any (isActionUsed a) toRemove
-isActionUsed :: Action -> Action -> Bool
-isActionUsed (Action av1 av2 _) (Action bv1 bv2 _) =
-    (av1 == bv1 && av2 == bv2) || (av1 == bv2 && av2 == bv1)
-
-sortBySpatialDistToDest :: Vertex -> [Action] -> [Action]
-sortBySpatialDistToDest dest xs = sortBy (\x y -> distToDest dest x < distToDest dest y) xs
-distToDest :: Vertex -> Action -> Float
-distToDest dest (Action _ v2 _) = distHaversine dest v2
-
 data Connection = Connection Vertex Vertex Float -- v1 v2 sum_cost
     deriving Show
 makeConnection :: Vertex -> Vertex -> String -> Connection
 makeConnection v1 v2 sumCost = Connection v1 v2 (read sumCost)
 
-data Vertex = Vertex {
-      vertexID :: Int
-    , vertexLong :: Float
-    , vertexLat :: Float
-    }
-instance Show Vertex where
-    show (Vertex v _ _ ) = show v
-instance Eq Vertex where
-    (Vertex v1 _ _ ) == (Vertex v2 _ _ ) = v1 == v2
-instance Ord Vertex where
-  compare (Vertex v1 _ _ ) (Vertex v2 _ _ ) = compare v1 v2
-makeVertex :: String -> String -> String -> Vertex
-makeVertex v long lat = Vertex (read v) (read long) (read lat)
+data Vertex = Vertex Int
 
-distHaversine :: Vertex -> Vertex -> Float
-distHaversine (Vertex _ long1 lat1) (Vertex _ long2 lat2) =
-    sqrt ((long1 - long2)^2 + (lat1 - lat2)^2)
-    --let r = 6371000  -- radius of Earth in metres
-    --    toRadians n = n * pi / 180
-    --    square x = x * x
-    --    cosr = cos . toRadians
-    --    dlat = toRadians (lat1 - lat2) / 2
-    --    dlong = toRadians (long1 - long2) / 2
-    --    a = square (sin dlat) + cosr lat1 * cosr lat2 * square (sin dlong)
-    --    c = 2 * atan2 (sqrt a) (sqrt (1 - a))
-    --in r * c
+instance Show Vertex where
+    show (Vertex v) = show v
+instance Eq Vertex where
+    (Vertex v1) == (Vertex v2) = v1 == v2
+instance Ord Vertex where
+  compare (Vertex v1) (Vertex v2) = compare v1 v2
+makeVertex :: String -> Vertex
+makeVertex v = Vertex (read v)
