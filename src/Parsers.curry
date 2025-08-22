@@ -40,8 +40,7 @@ readConnections path verticesMap = do
         verticesV1 = map (findVertexUnsafe verticesMap . read) colV1
         colV2 = getCol "v2" header rows
         verticesV2 = map (findVertexUnsafe verticesMap . read) colV2
-        colCost = getCol "sum_cost" header rows
-    let connections = zipWith3 makeConnection verticesV1 verticesV2 colCost
+    let connections = zipWith makeConnection verticesV1 verticesV2
     return connections
 
 getCol :: String -> [String] -> [[String]] -> [String]

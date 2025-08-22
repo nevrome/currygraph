@@ -5,7 +5,7 @@ import Parsers
 
 import System.IO
 import Data.List
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, catMaybes)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Control.Search.AllValues
@@ -46,22 +46,34 @@ runLCP (
 
 pathsForConnections :: Handle -> AdjacencyMap -> [Connection] -> Int -> IO ()
 pathsForConnections h adj cons nrPaths = do
-    mapM_ (\con@(Connection v1 v2 _) -> do
+    mapM_ (\con -> do
         putStrLn $ show con
-        let path = fromJust $ dijkstra adj v1 v2
-        writePath h v1 v2 path
+        paths <- getOneValue $ dijkstraMulti adj con [] 5
+        case paths of
+            Nothing -> return ()
+            Just paths' -> mapM_ (writePath h con) paths'
       ) cons
 
 type Path = ([Vertex], Float)
 
-writePath :: Handle -> Vertex -> Vertex -> Path -> IO ()
-writePath h v1 v2 (vs,cost) =
+writePath :: Handle -> Connection -> Path -> IO ()
+writePath h (Connection v1 v2) (vs,cost) =
     hPutStrLn h $ intercalate "," [show v1, show v2, show cost, showPath vs]
 showPath :: [Vertex] -> String
 showPath = intercalate ";" . map show
 
-dijkstra :: AdjacencyMap -> Vertex -> Vertex -> Maybe Path
-dijkstra adj start end = go [(start,0,[start])] S.empty
+dijkstraMulti :: AdjacencyMap -> Connection -> [Path] -> Int -> [Path]
+dijkstraMulti _ _ acc 0 = reverse acc
+dijkstraMulti adj con acc nrPaths =
+    let foundPath = dijkstra adj con
+    in case foundPath of
+        Nothing -> reverse acc
+        Just p@(vertices,_) -> do
+            let newAdj = removeVertices adj (tail $ init vertices)
+            dijkstraMulti newAdj con (p:acc) (nrPaths-1)
+
+dijkstra :: AdjacencyMap -> Connection -> Maybe Path
+dijkstra adj (Connection start end) = go [(start,0,[start])] S.empty
   where
     go [] _ = Nothing
     go ((curPos,curCost,curPath):queue) visited

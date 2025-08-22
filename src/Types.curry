@@ -48,10 +48,10 @@ data Edge = Edge Vertex Vertex Float -- v1 v2 cost
 makeEdge :: Vertex -> Vertex -> String -> Edge
 makeEdge v1 v2 cost = Edge v1 v2 (read cost)
 
-data Connection = Connection Vertex Vertex Float -- v1 v2 sum_cost
+data Connection = Connection Vertex Vertex -- v1 v2
     deriving Show
-makeConnection :: Vertex -> Vertex -> String -> Connection
-makeConnection v1 v2 sumCost = Connection v1 v2 (read sumCost)
+makeConnection :: Vertex -> Vertex -> Connection
+makeConnection v1 v2 = Connection v1 v2
 
 data Vertex = Vertex Int
 
