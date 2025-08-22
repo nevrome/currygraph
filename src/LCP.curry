@@ -46,7 +46,8 @@ runLCP (
 
 pathsForConnections :: Handle -> AdjacencyMap -> [Connection] -> Int -> IO ()
 pathsForConnections h adj cons nrPaths = do
-    mapM_ (\(Connection v1 v2 _) -> do
+    mapM_ (\con@(Connection v1 v2 _) -> do
+        putStrLn $ show con
         allPaths <- fromJust <$> getOneValue (yen adj v1 v2 nrPaths)
         mapM_ (writePath h v1 v2) allPaths
       ) cons
@@ -78,21 +79,21 @@ yen adj start end maxPaths =
         in case sortedCands of
              []              -> pathResults
              (bestPath:rest) -> loop (pathResults ++ [bestPath]) rest (count+1)
-    spurPaths :: Path -> [Path] -> Int -> [Path]
     spurPaths (pathVertices,_) existingResults spurIndex =
-      let rootPathVertices = take (spurIndex+1) pathVertices
-          spurNode         = fst (last rootPathVertices)
-          removedEdges     = [ (fst (path !! spurIndex), fst (path !! (spurIndex+1)))
-                             | (path,_) <- existingResults
-                             , take (spurIndex+1) path == rootPathVertices
-                             ]
-          prunedAdj        = removeEdges adj removedEdges
-      in case dijkstra prunedAdj spurNode end of
-           Nothing -> []
-           Just (spurVertices, spurCost) ->
-             let totalPathVertices = rootPathVertices ++ tail spurVertices
-                 totalPathCost     = snd (last rootPathVertices) + spurCost
-             in [(totalPathVertices, totalPathCost)]
+        let rootPathVertices = take (spurIndex+1) pathVertices
+            spurNode         = fst (last rootPathVertices)
+            removedEdges     = [ (fst (path !! spurIndex), fst (path !! (spurIndex+1)))
+                               | (path,_) <- existingResults
+                               , take (spurIndex+1) path == rootPathVertices
+                               ]
+            blockedVertices  = map fst (init rootPathVertices)
+            prunedAdj        = removeVertices (removeEdges adj removedEdges) blockedVertices
+        in case dijkstra prunedAdj spurNode end of
+            Nothing -> []
+            Just (spurVertices, spurCost) ->
+                let totalPathVertices = rootPathVertices ++ tail spurVertices
+                    totalPathCost     = snd (last rootPathVertices) + spurCost
+                in [(totalPathVertices, totalPathCost)]
 
 dijkstra :: AdjacencyMap -> Vertex -> Vertex -> Maybe Path
 dijkstra adj start end = go [(start,0,[(start,0)])] S.empty

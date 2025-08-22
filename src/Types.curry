@@ -3,6 +3,7 @@ module Types where
 import Data.List
 import Data.Maybe
 import qualified Data.Map as M
+import qualified Data.Set as S
 
 infinity :: Float
 infinity = 1.0 / 0.0
@@ -25,6 +26,16 @@ removeEdges m [] = m
 removeEdges m toRemove =
     let remE v1 v2 = M.adjust (filter ((/= v2) . fst)) v1
     in foldl (\m (vFrom,vTo) -> remE vTo vFrom (remE vFrom vTo m)) m toRemove
+removeVertices :: AdjacencyMap -> [Vertex] -> AdjacencyMap
+removeVertices m toRemove =
+    let toRemoveSet = S.fromList toRemove
+        -- drop neighbours that are in toRemoveSet
+        filteredList =
+            [ (k, filter (\(v,_) -> not (S.member v toRemoveSet)) nbrs)
+            | (k, nbrs) <- M.toList m
+            , not (S.member k toRemoveSet) -- also drop the keys
+            ]
+    in M.fromList filteredList
 
 getNeighbors :: AdjacencyMap -> Vertex -> [Vertex]
 getNeighbors adj v = map fst $ M.findWithDefault [] v adj
