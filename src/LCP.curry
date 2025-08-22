@@ -73,9 +73,21 @@ dijkstraMulti adj con acc seed nrPaths =
         Just p@(vertices,_) -> do
             --let newAdj = removeVertices adj (tail $ init vertices)
             -- remove random vertex
-            let randomVertexToRemove = head $ shuffle seed (tail $ init vertices)
+            --let randomVertexToRemove = head $ shuffle seed (tail $ init vertices)
+            let randomVertexToRemove = getBiasedMiddleVertex seed vertices
                 newAdj = removeVertices adj [randomVertexToRemove]
             dijkstraMulti newAdj con (p:acc) (head (nextInt seed)) (nrPaths-1)
+
+getBiasedMiddleVertex :: Int -> [Vertex] -> Vertex
+getBiasedMiddleVertex seed vs =
+    let n         = length vs
+        midIndex  = n `div` 2
+        maxWeight = midIndex + 1
+        -- create weighted list: middle gets maxWeight copies, edges get fewer
+        weighted  = concat [ replicate (maxWeight - abs (i - midIndex)) v
+                           | (v,i) <- zip vs [0..] ]
+        shuffled  = shuffle seed weighted
+    in head shuffled
 
 dijkstra :: AdjacencyMap -> Connection -> Maybe Path
 dijkstra adj (Connection start end) = go [(start,0,[start])] S.empty
@@ -86,11 +98,11 @@ dijkstra adj (Connection start end) = go [(start,0,[start])] S.empty
       | curPos `S.member` visited = go queue visited
       | otherwise =
           let neighbors    = getNeighborsWithCost adj curPos
-              updatedQueue = foldl updateQueueEntry queue neighbors
+              updatedQueue = foldl update queue neighbors
           in go updatedQueue (S.insert curPos visited)
           where
-              updateQueueEntry :: [(Vertex,Float,[Vertex])] -> (Vertex,Float) -> [(Vertex,Float,[Vertex])]
-              updateQueueEntry accQueue (neighborVertex, edgeWeight)
+              update :: [(Vertex,Float,[Vertex])] -> (Vertex,Float) -> [(Vertex,Float,[Vertex])]
+              update accQueue (neighborVertex, edgeWeight)
                 | neighborVertex `S.member` visited = accQueue
                 | otherwise = insertBy (\(_,c1,_) (_,c2,_) -> c1 < c2)
                                        (neighborVertex, curCost+edgeWeight, neighborVertex:curPath)
