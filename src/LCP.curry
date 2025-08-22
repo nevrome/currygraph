@@ -71,16 +71,17 @@ showPath = intercalate ";" . map show
 dijkstraMulti :: AdjacencyMap -> Connection -> [Path] -> Int -> Int -> [Path]
 dijkstraMulti _ _ acc 0 _ = reverse acc
 dijkstraMulti adj con acc nrPaths seed =
-    let foundPath = dijkstra adj con
-    in case foundPath of
-        Nothing -> reverse acc
+    case dijkstra adj con of
+        Nothing -> do
+            dijkstraMulti adj con acc (nrPaths-1) (seed+1)
         Just p@(vertices,_) -> do
+            let verticesWithoutStartEnd = tail $ init vertices
             -- remove all used vertices
-            --let newAdj = removeVertices adj (tail $ init vertices)
+            --let newAdj = removeVertices adj verticesWithoutStartEnd
             -- remove random vertex
-            --let randomVertexToRemove = head $ shuffle seed (tail $ init vertices)
+            --let randomVertexToRemove = head $ shuffle seed verticesWithoutStartEnd
             -- remove weighted random vertex
-            let randomVertexToRemove = getBiasedMiddleVertex seed vertices
+            let randomVertexToRemove = getBiasedMiddleVertex seed verticesWithoutStartEnd
                 newAdj = removeVertices adj [randomVertexToRemove]
             dijkstraMulti newAdj con (p:acc) (nrPaths-1) (seed+1)
 
