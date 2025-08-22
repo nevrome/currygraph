@@ -103,46 +103,12 @@ docNrPaths = OP.long "nrPaths"
 parseNrPaths =
     OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpNrPaths = read s}}) docNrPaths
 
---docDeleteUsedEdges :: OP.Mod
---docDeleteUsedEdges = OP.long "deleteUsedEdges"
---            OP.<> OP.help "Should edges used by preceding connections be reused? \
---                          \Note that the order of connections in --connectionFile matters with this. \
---                          \Default: False."
---parseDeleteUsedEdges =
---    OP.flag (\a -> Right $ a {com = LCP (lcpOpts a) {lcpDeleteUsedEdges = True}}) docDeleteUsedEdges
-
--- docMaxNrBranches :: OP.Mod
--- docMaxNrBranches = OP.long "maxNrBranches"
---             OP.<> OP.metavar "INT"
---             OP.<> OP.help "Maximum number of paths that should be tried for one connection. \
---                           \Default: 1000."
--- parseMaxNrBranches =
---     OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpMaxNrBranches = read s}}) docMaxNrBranches
-
--- docCostThresholdAbs :: OP.Mod
--- docCostThresholdAbs = OP.long "absCostThreshold"
---             OP.<> OP.metavar "FLOAT"
---             OP.<> OP.help "Maximum cost threshold above which a path should be pruned. \
---                           \Set either this, --relCostThreshold, or nothing. Default: None."
--- parseCostThresholdAbs =
---     OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpCostThreshold = Absolute $ read s}}) docCostThresholdAbs
-
--- docCostThresholdRel :: OP.Mod
--- docCostThresholdRel = OP.long "relCostThreshold"
---             OP.<> OP.metavar "FLOAT"
---             OP.<> OP.help "Maximum cost threshold just as --absCostThreshold, but as a multiplication \
---                           \factor applied to the sum_cost of the given connection.\
---                           \Set either this, --absCostThreshold, or nothing. Default: None."
--- parseCostThresholdRel =
---     OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpCostThreshold = Relative $ read s}}) docCostThresholdRel
-
--- docUpdateCostThreshold :: OP.Mod
--- docUpdateCostThreshold = OP.long "updateCostThreshold"
---             OP.<> OP.help "Should the cost threshold for path pruning be updated as soon as a path \
---                           \is discovered. From that point onward --absCostThreshold and --relCostThreshold \
---                           \are obsolete. Default: False."
--- parseUpdateCostThreshold =
---     OP.flag (\a -> Right $ a {com = LCP (lcpOpts a) {lcpUpdateCostThreshold = True}}) docUpdateCostThreshold
+docSeed :: OP.Mod
+docSeed = OP.long "seed"
+            OP.<> OP.metavar "INT"
+            OP.<> OP.help "Seed for random number gerneration. Default: Nothing."
+parseSeed =
+    OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpSeed = Just $ read s}}) docSeed
 
 -- only bfs
 
@@ -178,6 +144,7 @@ cmdParser = OP.optParser $
             <.> parseEdgeFileLCP
             <.> parseConnectionFile
             <.> parseNrPaths
+            <.> parseSeed
             <.> parseOutFileLCP
         ) OP.<|>
         OP.command "bfs" (OP.help "Breadth-first search for the n-nearest neighbors on a graph \
@@ -196,7 +163,7 @@ cmdParser = OP.optParser $
 lcpOpts :: Options -> LCPOptions
 lcpOpts s = case com s of
   LCP opts -> opts
-  _        -> LCPOptions "" "" "" 1 ""
+  _        -> LCPOptions "" "" "" 1 Nothing ""
 bfsOpts :: Options -> BFSOptions
 bfsOpts s = case com s of
   BFS opts -> opts
