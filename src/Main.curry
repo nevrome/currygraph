@@ -96,6 +96,13 @@ docConnectionFile = OP.long "connectionFile"
 parseConnectionFile =
     OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpConnectionFile = s}}) docConnectionFile
 
+docNrPaths :: OP.Mod
+docNrPaths = OP.long "nrPaths"
+            OP.<> OP.metavar "INT"
+            OP.<> OP.help "Number of paths that should be computed for each connection. Default: 1."
+parseNrPaths =
+    OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpNrPaths = read s}}) docNrPaths
+
 --docDeleteUsedEdges :: OP.Mod
 --docDeleteUsedEdges = OP.long "deleteUsedEdges"
 --            OP.<> OP.help "Should edges used by preceding connections be reused? \
@@ -170,6 +177,7 @@ cmdParser = OP.optParser $
                 parseVertFileLCP
             <.> parseEdgeFileLCP
             <.> parseConnectionFile
+            <.> parseNrPaths
             <.> parseOutFileLCP
         ) OP.<|>
         OP.command "bfs" (OP.help "Breadth-first search for the n-nearest neighbors on a graph \
@@ -188,7 +196,7 @@ cmdParser = OP.optParser $
 lcpOpts :: Options -> LCPOptions
 lcpOpts s = case com s of
   LCP opts -> opts
-  _        -> LCPOptions "" "" "" ""
+  _        -> LCPOptions "" "" "" 1 ""
 bfsOpts :: Options -> BFSOptions
 bfsOpts s = case com s of
   BFS opts -> opts

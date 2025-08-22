@@ -7,8 +7,6 @@ import qualified Data.Map as M
 infinity :: Float
 infinity = 1.0 / 0.0
 
-type Path = ([Vertex], Float)
-
 type VertexMap = M.Map Int Vertex
 
 buildVertexMap :: [Vertex] -> VertexMap
