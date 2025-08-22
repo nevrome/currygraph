@@ -22,6 +22,11 @@ buildAdjacencyMap :: [Edge] -> AdjacencyMap
 buildAdjacencyMap es = foldl addEdge M.empty es
   where
     addEdge m (Edge v1 v2 c) = M.insertWith (++) v1 [(v2,c)] $ M.insertWith (++) v2 [(v1,c)] m
+removeEdges :: AdjacencyMap -> [(Vertex,Vertex)] -> AdjacencyMap
+removeEdges m [] = m
+removeEdges m toRemove =
+    let remE v1 v2 = M.adjust (filter ((/= v2) . fst)) v1
+    in foldl (\m (vFrom,vTo) -> remE vTo vFrom (remE vFrom vTo m)) m toRemove
 
 getNeighbors :: AdjacencyMap -> Vertex -> [Vertex]
 getNeighbors adj v = map fst $ M.findWithDefault [] v adj

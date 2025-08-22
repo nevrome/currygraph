@@ -64,6 +64,7 @@ yen adj start end maxPaths =
         Nothing      -> []
         Just firstPath -> loop [firstPath] [] 1
   where
+    loop :: [([Vertex], Float)] -> [([Vertex], Float)] -> Int -> [([Vertex], Float)]
     loop pathResults _ count | count >= maxPaths = pathResults
     loop pathResults candidatePaths count =
       let prevPath    = pathResults !! (count-1)
@@ -80,14 +81,13 @@ yen adj start end maxPaths =
                              | (path,_) <- existingResults
                              , take (spurIndex+1) path == rootPathVertices
                              ]
-          prunedAdj        = foldl (\m (vFrom,vTo) -> remE vTo vFrom (remE vFrom vTo m)) adj removedEdges
+          prunedAdj        = removeEdges adj removedEdges
       in case dijkstra prunedAdj spurNode end of
            Nothing -> []
            Just (spurVertices, spurCost) ->
              let totalPathVertices = rootPathVertices ++ tail spurVertices
                  totalPathCost     = pathCost rootPathVertices + spurCost
              in [(totalPathVertices, totalPathCost)]
-    remE v1 v2 = M.adjust (filter ((/= v2) . fst)) v1
     pathCost verts = sum [ cost
                          | (vFrom,vTo) <- zip verts (tail verts)
                          , Just cost   <- [lookup vTo (M.findWithDefault [] vFrom adj)]
