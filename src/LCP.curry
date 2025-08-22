@@ -9,6 +9,7 @@ import Data.Maybe (fromJust, catMaybes)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Control.Search.AllValues
+import System.Random
 
 data LCPOptions = LCPOptions {
       lcpVertFile :: String
@@ -48,7 +49,8 @@ pathsForConnections :: Handle -> AdjacencyMap -> [Connection] -> Int -> IO ()
 pathsForConnections h adj cons nrPaths = do
     mapM_ (\con -> do
         putStrLn $ show con
-        paths <- getOneValue $ dijkstraMulti adj con [] 5
+        seed <- getRandomSeed
+        paths <- getOneValue $ dijkstraMulti adj con [] seed nrPaths
         case paths of
             Nothing -> return ()
             Just paths' -> mapM_ (writePath h con) paths'
@@ -62,15 +64,18 @@ writePath h (Connection v1 v2) (vs,cost) =
 showPath :: [Vertex] -> String
 showPath = intercalate ";" . map show
 
-dijkstraMulti :: AdjacencyMap -> Connection -> [Path] -> Int -> [Path]
-dijkstraMulti _ _ acc 0 = reverse acc
-dijkstraMulti adj con acc nrPaths =
+dijkstraMulti :: AdjacencyMap -> Connection -> [Path] -> Int -> Int -> [Path]
+dijkstraMulti _ _ acc _ 0 = reverse acc
+dijkstraMulti adj con acc seed nrPaths =
     let foundPath = dijkstra adj con
     in case foundPath of
         Nothing -> reverse acc
         Just p@(vertices,_) -> do
-            let newAdj = removeVertices adj (tail $ init vertices)
-            dijkstraMulti newAdj con (p:acc) (nrPaths-1)
+            --let newAdj = removeVertices adj (tail $ init vertices)
+            -- remove random vertex
+            let randomVertexToRemove = head $ shuffle seed (tail $ init vertices)
+                newAdj = removeVertices adj [randomVertexToRemove]
+            dijkstraMulti newAdj con (p:acc) (head (nextInt seed)) (nrPaths-1)
 
 dijkstra :: AdjacencyMap -> Connection -> Maybe Path
 dijkstra adj (Connection start end) = go [(start,0,[start])] S.empty
