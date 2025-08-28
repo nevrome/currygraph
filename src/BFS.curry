@@ -20,7 +20,12 @@ data BFSOptions = BFSOptions {
 } deriving Show
 
 runBFS :: BFSOptions -> IO ()
-runBFS (BFSOptions vertFile edgeFile destFile minNrDests stopAtDests outFile) = do
+runBFS (
+    BFSOptions
+    vertFile edgeFile destFile
+    minNrDests stopAtDests
+    outFile
+    ) = do
     putStrLn "Reading data..."
     vertices <- readVertices vertFile
     let vm = buildVertexMap vertices

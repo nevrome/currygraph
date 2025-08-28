@@ -15,6 +15,7 @@ data LCPOptions = LCPOptions {
       lcpVertFile :: String
     , lcpEdgeFile :: String
     , lcpConnectionFile :: String
+    , lcpDestFile :: Maybe String
     , lcpNrPaths :: Int
     , lcpSeed :: Maybe Int
     , lcpOutFile :: String
@@ -24,6 +25,7 @@ runLCP :: LCPOptions -> IO ()
 runLCP (
     LCPOptions
     vertFile edgeFile connectionFile
+    maybeDestFile
     nrPaths maybeSeed
     outFile
     ) = do
@@ -38,23 +40,30 @@ runLCP (
     putStrLn $ "Size adjacency map: " ++ show (M.size adj) -- to force evaluation
     connections <- readConnections connectionFile vm
     putStrLn $ "Connections: " ++ show (length connections)
+    dests <- case maybeDestFile of
+        Nothing -> return S.empty
+        Just destFile -> do
+            verticesDest <- readVertices destFile
+            let verticesDestSet = S.fromList verticesDest
+            putStrLn $ "Destination vertices: " ++ show (S.size verticesDestSet)
+            return verticesDestSet
     putStrLn "Searching..."
     h <- openFile outFile WriteMode
     hPutStrLn h "v1,v2,sum_cost,path" -- csv header
-    pathsForConnections h adj connections nrPaths maybeSeed
+    pathsForConnections h adj connections dests nrPaths maybeSeed
     hFlush h
     hClose h
     putStrLn "Done"
 
-pathsForConnections :: Handle -> AdjacencyMap -> [Connection] -> Int -> (Maybe Int) -> IO ()
-pathsForConnections h adj cons nrPaths maybeSeed = do
+pathsForConnections :: Handle -> AdjacencyMap -> [Connection] -> (S.Set Vertex) -> Int -> (Maybe Int) -> IO ()
+pathsForConnections h adj cons dests nrPaths maybeSeed = do
     seed <- case maybeSeed of
         Nothing -> getRandomSeed
         Just x -> return x
     let rands = take (length cons) $ nextInt seed
     mapM_ (\(con, rand) -> do
         putStrLn $ show con
-        paths <- getOneValue $ dijkstraMulti adj con [] nrPaths rand
+        paths <- getOneValue $ dijkstraMulti adj con dests [] nrPaths rand
         case paths of
             Nothing -> return ()
             Just paths' -> mapM_ (writePath h con) paths'
@@ -68,12 +77,16 @@ writePath h (Connection v1 v2) (vs,cost) =
 showPath :: [Vertex] -> String
 showPath = intercalate ";" . map show
 
-dijkstraMulti :: AdjacencyMap -> Connection -> [Path] -> Int -> Int -> [Path]
-dijkstraMulti _ _ acc 0 _ = reverse acc
-dijkstraMulti adj con acc nrPaths seed =
-    case dijkstra adj con of
+dijkstraMulti :: AdjacencyMap -> Connection -> (S.Set Vertex) -> [Path] -> Int -> Int -> [Path]
+dijkstraMulti _ _ _ acc 0 _ = reverse acc
+dijkstraMulti adj con@(Connection start end) dests acc nrPaths seed =
+    -- optional mechanism to remove occupied nodes from the graph
+    let toOmit = S.deleteAll [start, end] dests
+        adjFiltered = removeVertices adj toOmit
+    -- search paths
+    in case dijkstra adjFiltered con of
         Nothing -> do
-            dijkstraMulti adj con acc (nrPaths-1) (seed+1)
+            dijkstraMulti adj con dests acc (nrPaths-1) (seed+1)
         Just p@(vertices,_) -> do
             let verticesWithoutStartEnd = tail $ init vertices
             -- remove all used vertices
@@ -82,8 +95,8 @@ dijkstraMulti adj con acc nrPaths seed =
             --let randomVertexToRemove = head $ shuffle seed verticesWithoutStartEnd
             -- remove weighted random vertex
             let randomVertexToRemove = getBiasedMiddleVertex seed verticesWithoutStartEnd
-                newAdj = removeVertices adj [randomVertexToRemove]
-            dijkstraMulti newAdj con (p:acc) (nrPaths-1) (seed+1)
+                newAdj = removeVertices adj (S.singleton randomVertexToRemove)
+            dijkstraMulti newAdj con dests (p:acc) (nrPaths-1) (seed+1)
 
 getBiasedMiddleVertex :: Int -> [Vertex] -> Vertex
 getBiasedMiddleVertex seed vs =

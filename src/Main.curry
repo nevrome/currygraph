@@ -86,6 +86,16 @@ docVerbose = OP.long "verbose"
 --parseOutFileBFS =
 --    OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsOutFile = s}}) docOutFile
 
+docDestFile :: OP.Mod
+docDestFile = OP.long "destFile"
+            OP.<> OP.short "d"
+            OP.<> OP.metavar "PATH"
+            OP.<> OP.help ".csv file. One row for each focal/destination vertex, columns: id."
+parseDestFileLCP =
+    OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpDestFile = Just s}}) docDestFile
+parseDestFileBFS =
+    OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsDestFile = s}}) docDestFile
+
 -- only lcp
 
 docConnectionFile :: OP.Mod
@@ -112,14 +122,6 @@ parseSeed =
 
 -- only bfs
 
-docDestFile :: OP.Mod
-docDestFile = OP.long "destFile"
-            OP.<> OP.short "d"
-            OP.<> OP.metavar "PATH"
-            OP.<> OP.help ".csv file. One row for each focal/destination vertex, columns: id, long, lat."
-parseDestFile =
-    OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsDestFile = s}}) docDestFile
-
 docMinDests :: OP.Mod
 docMinDests = OP.long "minDests"
             OP.<> OP.metavar "INT"
@@ -143,6 +145,7 @@ cmdParser = OP.optParser $
                 parseVertFileLCP
             <.> parseEdgeFileLCP
             <.> parseConnectionFile
+            <.> parseDestFileLCP
             <.> parseNrPaths
             <.> parseSeed
             <.> parseOutFileLCP
@@ -152,7 +155,7 @@ cmdParser = OP.optParser $
             (\a -> Right $ a { com = BFS (bfsOpts a) }) (
                 parseVertFileBFS
             <.> parseEdgeFileBFS
-            <.> parseDestFile
+            <.> parseDestFileBFS
             <.> parseMinDests
             <.> parseStopAtDests
             <.> parseOutFileBFS
@@ -163,7 +166,7 @@ cmdParser = OP.optParser $
 lcpOpts :: Options -> LCPOptions
 lcpOpts s = case com s of
   LCP opts -> opts
-  _        -> LCPOptions "" "" "" 1 Nothing ""
+  _        -> LCPOptions "" "" "" Nothing 1 Nothing ""
 bfsOpts :: Options -> BFSOptions
 bfsOpts s = case com s of
   BFS opts -> opts
