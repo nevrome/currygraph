@@ -64,10 +64,8 @@ pathsForConnections h adj cons dests nrPaths maybeSeed = do
     mapM_ (\(con@(Connection start end), rand) -> do
         putStrLn $ show con
         hFlush stdout
-        -- optional mechanism to remove occupied nodes from the graph
         let toOmit = S.deleteAll [start, end] dests
-            adjFiltered = removeVertices adj toOmit
-        paths <- getOneValue $ dijkstraMulti adjFiltered con [] nrPaths rand
+        paths <- getOneValue $ dijkstraMulti adj con [] toOmit nrPaths rand
         case paths of
             Nothing -> return ()
             Just paths' -> mapM_ (writePath h con) paths'
@@ -81,12 +79,12 @@ writePath h (Connection v1 v2) (vs,cost) =
 showPath :: [Vertex] -> String
 showPath = intercalate ";" . map show
 
-dijkstraMulti :: AdjacencyMap -> Connection -> [Path] -> Int -> Int -> [Path]
-dijkstraMulti _ _ acc 0 _ = reverse acc
-dijkstraMulti adj con acc nrPaths seed =
-    case dijkstra adj con of
+dijkstraMulti :: AdjacencyMap -> Connection -> [Path] -> (S.Set Vertex) -> Int -> Int -> [Path]
+dijkstraMulti _ _ acc _ 0 _ = reverse acc
+dijkstraMulti adj con acc toOmit nrPaths seed =
+    case dijkstra adj con toOmit of
         Nothing -> do
-            dijkstraMulti adj con acc (nrPaths-1) (seed+1)
+            dijkstraMulti adj con acc toOmit (nrPaths-1) (seed+1)
         Just p@(vertices,_) -> do
             let verticesWithoutStartEnd = tail $ init vertices
             -- remove all used vertices
@@ -96,7 +94,7 @@ dijkstraMulti adj con acc nrPaths seed =
             -- remove weighted random vertex
             let randomVertexToRemove = getBiasedMiddleVertex seed verticesWithoutStartEnd
                 newAdj = removeVertices adj (S.singleton randomVertexToRemove)
-            dijkstraMulti newAdj con (p:acc) (nrPaths-1) (seed+1)
+            dijkstraMulti newAdj con (p:acc) toOmit (nrPaths-1) (seed+1)
 
 getBiasedMiddleVertex :: Int -> [Vertex] -> Vertex
 getBiasedMiddleVertex seed vs =
@@ -108,16 +106,17 @@ getBiasedMiddleVertex seed vs =
         shuffled  = shuffle seed weighted
     in head shuffled
 
-dijkstra :: AdjacencyMap -> Connection -> Maybe Path
-dijkstra adj (Connection start end) = go [(start,0,[start])] S.empty
+dijkstra :: AdjacencyMap -> Connection -> (S.Set Vertex) -> Maybe Path
+dijkstra adj (Connection start end) toOmit = go [(start,0,[start])] S.empty
   where
     go [] _ = Nothing
     go ((curPos,curCost,curPath):queue) visited
       | curPos == end = Just (reverse curPath, curCost)
       | curPos `S.member` visited = go queue visited
       | otherwise =
-          let neighbors    = getNeighborsWithCost adj curPos
-              updatedQueue = foldl update queue neighbors
+          let neighbors     = getNeighborsWithCost adj curPos
+              neighborsOmit = filter (\(v,_) -> not (S.member v toOmit)) neighbors
+              updatedQueue = foldl update queue neighborsOmit
           in go updatedQueue (S.insert curPos visited)
           where
               update :: [(Vertex,Float,[Vertex])] -> (Vertex,Float) -> [(Vertex,Float,[Vertex])]
