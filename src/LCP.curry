@@ -61,9 +61,13 @@ pathsForConnections h adj cons dests nrPaths maybeSeed = do
         Nothing -> getRandomSeed
         Just x -> return x
     let rands = take (length cons) $ nextInt seed
-    mapM_ (\(con, rand) -> do
+    mapM_ (\(con@(Connection start end), rand) -> do
         putStrLn $ show con
-        paths <- getOneValue $ dijkstraMulti adj con dests [] nrPaths rand
+        hFlush stdout
+        -- optional mechanism to remove occupied nodes from the graph
+        let toOmit = S.deleteAll [start, end] dests
+            adjFiltered = removeVertices adj toOmit
+        paths <- getOneValue $ dijkstraMulti adjFiltered con [] nrPaths rand
         case paths of
             Nothing -> return ()
             Just paths' -> mapM_ (writePath h con) paths'
@@ -77,16 +81,12 @@ writePath h (Connection v1 v2) (vs,cost) =
 showPath :: [Vertex] -> String
 showPath = intercalate ";" . map show
 
-dijkstraMulti :: AdjacencyMap -> Connection -> (S.Set Vertex) -> [Path] -> Int -> Int -> [Path]
-dijkstraMulti _ _ _ acc 0 _ = reverse acc
-dijkstraMulti adj con@(Connection start end) dests acc nrPaths seed =
-    -- optional mechanism to remove occupied nodes from the graph
-    let toOmit = S.deleteAll [start, end] dests
-        adjFiltered = removeVertices adj toOmit
-    -- search paths
-    in case dijkstra adjFiltered con of
+dijkstraMulti :: AdjacencyMap -> Connection -> [Path] -> Int -> Int -> [Path]
+dijkstraMulti _ _ acc 0 _ = reverse acc
+dijkstraMulti adj con acc nrPaths seed =
+    case dijkstra adj con of
         Nothing -> do
-            dijkstraMulti adj con dests acc (nrPaths-1) (seed+1)
+            dijkstraMulti adj con acc (nrPaths-1) (seed+1)
         Just p@(vertices,_) -> do
             let verticesWithoutStartEnd = tail $ init vertices
             -- remove all used vertices
@@ -96,7 +96,7 @@ dijkstraMulti adj con@(Connection start end) dests acc nrPaths seed =
             -- remove weighted random vertex
             let randomVertexToRemove = getBiasedMiddleVertex seed verticesWithoutStartEnd
                 newAdj = removeVertices adj (S.singleton randomVertexToRemove)
-            dijkstraMulti newAdj con dests (p:acc) (nrPaths-1) (seed+1)
+            dijkstraMulti newAdj con (p:acc) (nrPaths-1) (seed+1)
 
 getBiasedMiddleVertex :: Int -> [Vertex] -> Vertex
 getBiasedMiddleVertex seed vs =
