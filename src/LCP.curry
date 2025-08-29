@@ -21,6 +21,8 @@ data LCPOptions = LCPOptions {
     , lcpOutFile :: String
 } deriving Show
 
+data OmissionStrategy = None | WalkAround | FilterAfter
+
 runLCP :: LCPOptions -> IO ()
 runLCP (
     LCPOptions
@@ -68,8 +70,12 @@ pathsForConnections h adj cons dests nrPaths maybeSeed = do
         paths <- getOneValue $ dijkstraMulti adj con [] toOmit nrPaths rand
         case paths of
             Nothing -> return ()
-            Just paths' -> mapM_ (writePath h con) paths'
+            Just paths' -> do
+                mapM_ (writePath h con) $ filter (\p -> not $ shouldBeOmitted toOmit p) paths'
       ) $ zip cons rands
+
+shouldBeOmitted :: (S.Set Vertex) -> Path -> Bool
+shouldBeOmitted toOmit (vs,_) = any (\v -> S.member v toOmit) vs
 
 type Path = ([Vertex], Float)
 
@@ -115,8 +121,9 @@ dijkstra adj (Connection start end) toOmit = go [(start,0,[start])] S.empty
       | curPos `S.member` visited = go queue visited
       | otherwise =
           let neighbors     = getNeighborsWithCost adj curPos
-              neighborsOmit = filter (\(v,_) -> not (S.member v toOmit)) neighbors
-              updatedQueue = foldl update queue neighborsOmit
+              updatedQueue = foldl update queue neighbors
+              --neighborsOmit = filter (\(v,_) -> not (S.member v toOmit)) neighbors
+              --updatedQueue = foldl update queue neighborsOmit
           in go updatedQueue (S.insert curPos visited)
           where
               update :: [(Vertex,Float,[Vertex])] -> (Vertex,Float) -> [(Vertex,Float,[Vertex])]
