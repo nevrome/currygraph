@@ -106,6 +106,17 @@ docConnectionFile = OP.long "connectionFile"
 parseConnectionFile =
     OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpConnectionFile = s}}) docConnectionFile
 
+docOmissionStrategy :: OP.Mod
+docOmissionStrategy = OP.long "omissionStrategy"
+            OP.<> OP.metavar "none|omit|filter"
+            OP.<> OP.help "Strategy how to handle dests in --destFile. Default: none."
+parseOmissionStrategy =
+    OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpOmissionStrategy = readOmissionStrategy s}}) docOmissionStrategy
+readOmissionStrategy :: String -> OmissionStrategy
+readOmissionStrategy "none" = OmitNone
+readOmissionStrategy "omit" = OmitDests
+readOmissionStrategy "filter" = FilterInHindsight
+
 docNrPaths :: OP.Mod
 docNrPaths = OP.long "nrPaths"
             OP.<> OP.metavar "INT"
@@ -153,6 +164,7 @@ cmdParser = OP.optParser $
                 parseVertFileLCP
             <.> parseEdgeFileLCP
             <.> parseConnectionFile
+            <.> parseOmissionStrategy
             <.> parseDestFileLCP
             <.> parseNrPaths
             <.> parseSeed
@@ -175,7 +187,7 @@ cmdParser = OP.optParser $
 lcpOpts :: Options -> LCPOptions
 lcpOpts s = case com s of
   LCP opts -> opts
-  _        -> LCPOptions "" "" "" Nothing 1 Nothing ""
+  _        -> LCPOptions "" "" "" OmitNone Nothing 1 Nothing ""
 bfsOpts :: Options -> BFSOptions
 bfsOpts s = case com s of
   BFS opts -> opts

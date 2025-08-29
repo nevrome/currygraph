@@ -15,17 +15,20 @@ data LCPOptions = LCPOptions {
       lcpVertFile :: String
     , lcpEdgeFile :: String
     , lcpConnectionFile :: String
+    , lcpOmissionStrategy :: OmissionStrategy
     , lcpDestFile :: Maybe String
     , lcpNrPaths :: Int
     , lcpSeed :: Maybe Int
     , lcpOutFile :: String
-} deriving Show
+}
+
+data OmissionStrategy = OmitNone | OmitDests | FilterInHindsight
 
 runLCP :: LCPOptions -> IO ()
 runLCP (
     LCPOptions
     vertFile edgeFile connectionFile
-    maybeDestFile
+    omissionStrategy maybeDestFile
     nrPaths maybeSeed
     outFile
     ) = do
@@ -50,13 +53,16 @@ runLCP (
     putStrLn "Searching..."
     h <- openFile outFile WriteMode
     hPutStrLn h "v1,v2,sum_cost,path" -- csv header
-    pathsForConnections h adj connections dests nrPaths maybeSeed
+    pathsForConnections h adj connections omissionStrategy dests nrPaths maybeSeed
     hFlush h
     hClose h
     putStrLn "Done"
 
-pathsForConnections :: Handle -> AdjacencyMap -> [Connection] -> (S.Set Vertex) -> Int -> (Maybe Int) -> IO ()
-pathsForConnections h adj cons dests nrPaths maybeSeed = do
+pathsForConnections :: Handle
+                       -> AdjacencyMap -> [Connection]
+                       -> OmissionStrategy -> (S.Set Vertex)
+                       -> Int -> (Maybe Int) -> IO ()
+pathsForConnections h adj cons omissionStrategy dests nrPaths maybeSeed = do
     seed <- case maybeSeed of
         Nothing -> getRandomSeed
         Just x -> return x
@@ -65,11 +71,16 @@ pathsForConnections h adj cons dests nrPaths maybeSeed = do
         putStrLn $ show con
         hFlush stdout
         let toOmit = S.deleteAll [start, end] dests
-        paths <- getOneValue $ dijkstraMulti adj con [] toOmit nrPaths rand
+        paths <- case omissionStrategy of
+            OmitDests -> getOneValue $ dijkstraMulti adj con [] toOmit  nrPaths rand
+            otherwise -> getOneValue $ dijkstraMulti adj con [] S.empty nrPaths rand
         case paths of
             Nothing -> return ()
             Just paths' -> do
-                mapM_ (writePath h con) $ filter (\p -> not $ shouldBeOmitted toOmit p) paths'
+                let filteredPaths = case omissionStrategy of
+                        FilterInHindsight -> filter (\p -> not $ shouldBeOmitted toOmit p) paths'
+                        otherwise         -> paths'
+                mapM_ (writePath h con) $ filteredPaths
       ) $ zip cons rands
 
 shouldBeOmitted :: (S.Set Vertex) -> Path -> Bool
@@ -119,9 +130,9 @@ dijkstra adj (Connection start end) toOmit = go [(start,0,[start])] S.empty
       | curPos `S.member` visited = go queue visited
       | otherwise =
           let neighbors     = getNeighborsWithCost adj curPos
-              updatedQueue = foldl update queue neighbors
-              --neighborsOmit = filter (\(v,_) -> not (S.member v toOmit)) neighbors
-              --updatedQueue = foldl update queue neighborsOmit
+              --updatedQueue = foldl update queue neighbors
+              neighborsOmit = filter (\(v,_) -> not (S.member v toOmit)) neighbors
+              updatedQueue = foldl update queue neighborsOmit
           in go updatedQueue (S.insert curPos visited)
           where
               update :: [(Vertex,Float,[Vertex])] -> (Vertex,Float) -> [(Vertex,Float,[Vertex])]
