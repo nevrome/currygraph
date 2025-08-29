@@ -14,7 +14,8 @@ data BFSOptions = BFSOptions {
       bfsVertFile :: String
     , bfsEdgeFile :: String
     , bfsDestFile :: String
-    , bfsMinNrDestinations :: Int
+    , bfsNrMinDests :: Int
+    , bfsIncDestsByLayer :: Float
     , bfsStopAtDests :: Bool
     , bfsOutFile :: String
 } deriving Show
@@ -23,7 +24,8 @@ runBFS :: BFSOptions -> IO ()
 runBFS (
     BFSOptions
     vertFile edgeFile destFile
-    minNrDests stopAtDests
+    nrMinDests incDestsByLayer
+    stopAtDests
     outFile
     ) = do
     putStrLn "Reading data..."
@@ -41,32 +43,33 @@ runBFS (
     putStrLn "Searching..."
     h <- openFile outFile WriteMode
     hPutStrLn h "v1,v2,sum_cost" -- csv header
-    mapM_ (bfsNClosest h adj verticesDestSet minNrDests stopAtDests) verticesDest
+    mapM_ (bfsNClosest h adj verticesDestSet nrMinDests incDestsByLayer stopAtDests) verticesDest
     hFlush h
     hClose h
     putStrLn "Done"
     
-bfsNClosest :: Handle -> AdjacencyMap -> S.Set Vertex -> Int -> Bool -> Vertex -> IO ()
-bfsNClosest h adj destinationSet minNrDests stopAtDests start = do
-    destInLayers <- getOneValue $ bfsLayersPruned adj destinationSet minNrDests stopAtDests start
+bfsNClosest :: Handle -> AdjacencyMap -> S.Set Vertex -> Int -> Float -> Bool -> Vertex -> IO ()
+bfsNClosest h adj destinationSet nrMinDests incDestsByLayer stopAtDests start = do
+    destInLayers <- getOneValue $ bfsLayersPruned adj destinationSet nrMinDests incDestsByLayer stopAtDests start
     case destInLayers of
         Nothing -> return ()
         Just layers -> writeBFSResults h start layers
 
-bfsLayersPruned :: AdjacencyMap -> S.Set Vertex -> Int -> Bool -> Vertex -> [[Vertex]]
-bfsLayersPruned adj destinationSet minNrDests stopAtDests start = go S.empty 0 [start]
+bfsLayersPruned :: AdjacencyMap -> S.Set Vertex -> Int -> Float -> Bool -> Vertex -> [[Vertex]]
+bfsLayersPruned adj destinationSet nrMinDests incDestsByLayer stopAtDests start =
+    go S.empty 0 (fromInt nrMinDests) [start]
     where
-        go _ _ [] = []
-        go visited nrDestsFound layer
-            | nrDestsFound >= minNrDests = []
+        go _ _ _ [] = []
+        go visited nrDestsFound nrDestsToStop layer
+            | nrDestsFound >= nrDestsToStop = []
             | otherwise =
                 let (foundDestinations,expandable) = case stopAtDests of
                         True -> partition (\x -> S.member x destinationSetWithoutFocal) layer
                         False -> (filter (\x -> S.member x destinationSetWithoutFocal) layer, layer)
-                    newNrDestsFound = nrDestsFound + length foundDestinations
+                    newNrDestsFound = nrDestsFound + fromInt (length foundDestinations)
                     nowVisited = S.union visited (S.fromList layer)
                     nextLayer = nub $ concatMap (\v -> filter (isNotAlreadyVisited nowVisited) (getNeighbors adj v)) expandable
-                in foundDestinations:(go nowVisited newNrDestsFound nextLayer)
+                in foundDestinations:(go nowVisited newNrDestsFound (nrDestsToStop+incDestsByLayer) nextLayer)
         isNotAlreadyVisited :: S.Set Vertex -> Vertex -> Bool
         isNotAlreadyVisited visited v = not $ S.member v visited
         destinationSetWithoutFocal :: S.Set Vertex

@@ -21,8 +21,6 @@ data LCPOptions = LCPOptions {
     , lcpOutFile :: String
 } deriving Show
 
-data OmissionStrategy = None | WalkAround | FilterAfter
-
 runLCP :: LCPOptions -> IO ()
 runLCP (
     LCPOptions

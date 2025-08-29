@@ -122,13 +122,21 @@ parseSeed =
 
 -- only bfs
 
-docMinDests :: OP.Mod
-docMinDests = OP.long "minDests"
+docNrMinDests :: OP.Mod
+docNrMinDests = OP.long "minDests"
             OP.<> OP.metavar "INT"
             OP.<> OP.help "Minimum number of destinations above which, when found, the search for a \
                           \focal point ceases."
-parseMinDests =
-    OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsMinNrDestinations = read s}}) docMinDests
+parseNrMinDests =
+    OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsNrMinDests = read s}}) docNrMinDests
+
+docIncDestsByLayer :: OP.Mod
+docIncDestsByLayer = OP.long "incDests"
+            OP.<> OP.metavar "INT"
+            OP.<> OP.help "For each layer opened, increase the number of destinations by adding this value. \
+                          \This allows for more connections for isolated destinations."
+parseIncDestsByLayer =
+    OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsIncDestsByLayer = read s}}) docIncDestsByLayer
 
 docStopAtDests :: OP.Mod
 docStopAtDests = OP.long "stopAtDests"
@@ -156,7 +164,8 @@ cmdParser = OP.optParser $
                 parseVertFileBFS
             <.> parseEdgeFileBFS
             <.> parseDestFileBFS
-            <.> parseMinDests
+            <.> parseNrMinDests
+            <.> parseIncDestsByLayer
             <.> parseStopAtDests
             <.> parseOutFileBFS
         )
@@ -170,7 +179,7 @@ lcpOpts s = case com s of
 bfsOpts :: Options -> BFSOptions
 bfsOpts s = case com s of
   BFS opts -> opts
-  _        -> BFSOptions "" "" "" 6 False ""
+  _        -> BFSOptions "" "" "" 6 0 False ""
 
 
 
