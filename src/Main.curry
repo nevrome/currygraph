@@ -2,6 +2,7 @@ module Main where
 
 import LCP
 import BFS
+import LRW
 
 import Data.List
 import Data.Maybe
@@ -17,6 +18,7 @@ data Command =
       NoCommand
     | LCP LCPOptions
     | BFS BFSOptions
+    | LRW LRWOptions
 
 defaultOptions :: Options
 defaultOptions = Options NoCommand
@@ -43,6 +45,7 @@ main = do
 runWithArgs :: Options -> IO ()
 runWithArgs (Options (LCP opts)) = runLCP opts
 runWithArgs (Options (BFS opts)) = runBFS opts
+runWithArgs (Options (LRW opts)) = runLRW opts
 
 -- parsers
 
@@ -56,6 +59,16 @@ parseVertFileLCP =
     OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpVertFile = s}}) docVertFile
 parseVertFileBFS =
     OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsVertFile = s}}) docVertFile
+parseVertFileLRW =
+    OP.option (\s a -> Right $ a {com = LRW (lrwOpts a) {lrwVertFile = s}}) docVertFile
+
+docFocalVertFile :: OP.Mod
+docFocalVertFile = OP.long "focalVertFile"
+            OP.<> OP.short "f"
+            OP.<> OP.metavar "PATH"
+            OP.<> OP.help ".csv file. One row for each vertex, columns: id, long, lat."
+parseFocalVertFileLRW =
+    OP.option (\s a -> Right $ a {com = LRW (lrwOpts a) {lrwFocalVertFile = s}}) docFocalVertFile
 
 docEdgeFile :: OP.Mod
 docEdgeFile = OP.long "edgeFile"
@@ -66,6 +79,8 @@ parseEdgeFileLCP =
     OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpEdgeFile = s}}) docEdgeFile
 parseEdgeFileBFS =
     OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsEdgeFile = s}}) docEdgeFile
+parseEdgeFileLRW =
+    OP.option (\s a -> Right $ a {com = LRW (lrwOpts a) {lrwEdgeFile = s}}) docEdgeFile
 
 docOutFile :: OP.Mod
 docOutFile = OP.long "outFile"
@@ -76,6 +91,26 @@ parseOutFileLCP =
     OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpOutFile = s}}) docOutFile
 parseOutFileBFS =
     OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsOutFile = s}}) docOutFile
+parseOutFileLRW =
+    OP.option (\s a -> Right $ a {com = LRW (lrwOpts a) {lrwOutFile = s}}) docOutFile
+
+docNrPaths :: OP.Mod
+docNrPaths = OP.long "nrPaths"
+            OP.<> OP.metavar "INT"
+            OP.<> OP.help "Number of paths that should be computed for each connection. Default: 1."
+parseNrPathsLCP =
+    OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpNrPaths = read s}}) docNrPaths
+parseNrPathsLRW =
+    OP.option (\s a -> Right $ a {com = LRW (lrwOpts a) {lrwNrPaths = read s}}) docNrPaths
+
+docSeed :: OP.Mod
+docSeed = OP.long "seed"
+            OP.<> OP.metavar "INT"
+            OP.<> OP.help "Seed for random number gerneration. Default: Nothing."
+parseSeedLCP =
+    OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpSeed = Just $ read s}}) docSeed
+parseSeedLRW =
+    OP.option (\s a -> Right $ a {com = LRW (lrwOpts a) {lrwSeed = Just $ read s}}) docSeed
 
 docVerbose :: OP.Mod
 docVerbose = OP.long "verbose"
@@ -117,20 +152,6 @@ readOmissionStrategy "none" = OmitNone
 readOmissionStrategy "omit" = OmitDests
 readOmissionStrategy "filter" = FilterInHindsight
 
-docNrPaths :: OP.Mod
-docNrPaths = OP.long "nrPaths"
-            OP.<> OP.metavar "INT"
-            OP.<> OP.help "Number of paths that should be computed for each connection. Default: 1."
-parseNrPaths =
-    OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpNrPaths = read s}}) docNrPaths
-
-docSeed :: OP.Mod
-docSeed = OP.long "seed"
-            OP.<> OP.metavar "INT"
-            OP.<> OP.help "Seed for random number gerneration. Default: Nothing."
-parseSeed =
-    OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpSeed = Just $ read s}}) docSeed
-
 -- only bfs
 
 docNrMinDests :: OP.Mod
@@ -155,6 +176,10 @@ docStopAtDests = OP.long "stopAtDests"
 parseStopAtDests =
     OP.flag (\a -> Right $ a {com = BFS (bfsOpts a) {bfsStopAtDests = True}}) docStopAtDests
 
+-- only lrw
+
+
+
 -- combining parsers
 
 cmdParser = OP.optParser $
@@ -166,8 +191,8 @@ cmdParser = OP.optParser $
             <.> parseConnectionFile
             <.> parseOmissionStrategy
             <.> parseDestFileLCP
-            <.> parseNrPaths
-            <.> parseSeed
+            <.> parseNrPathsLCP
+            <.> parseSeedLCP
             <.> parseOutFileLCP
         ) OP.<|>
         OP.command "bfs" (OP.help "Breadth-first search for the n-nearest neighbors on a graph \
@@ -180,6 +205,15 @@ cmdParser = OP.optParser $
             <.> parseIncDestsByLayer
             <.> parseStopAtDests
             <.> parseOutFileBFS
+        ) OP.<|>
+        OP.command "lrw" (OP.help "...")
+            (\a -> Right $ a { com = LRW (lrwOpts a) }) (
+                parseVertFileLRW
+            <.> parseEdgeFileLRW
+            <.> parseFocalVertFileLRW
+            <.> parseNrPathsLRW
+            <.> parseSeedLRW
+            <.> parseOutFileLRW
         )
     )
 
@@ -192,7 +226,10 @@ bfsOpts :: Options -> BFSOptions
 bfsOpts s = case com s of
   BFS opts -> opts
   _        -> BFSOptions "" "" "" 6 0 False ""
-
+lrwOpts :: Options -> LRWOptions
+lrwOpts s = case com s of
+  LRW opts -> opts
+  _        -> LRWOptions "" "" "" 1 Nothing ""
 
 
 

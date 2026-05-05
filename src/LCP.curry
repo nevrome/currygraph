@@ -2,7 +2,6 @@ module LCP where
 
 import Types
 import Parsers
-import qualified PriorityQueue as PQ
 
 import System.IO
 import Data.List
