@@ -6,7 +6,7 @@ data PQ p v
 -- Int = rank (null-path length)
 -- p = priority
 -- v = stored value
--- left/right children
+-- (PQ p v) (PQ p v) = left/right children
 
 rank :: PQ p v -> Int
 rank Empty = 0
@@ -27,7 +27,7 @@ merge h1@(Node _ p1 v1 l1 r1) h2@(Node _ p2 v2 l2 r2)
 empty :: PQ p a
 empty = Empty
 
--- insert is just merging with a singleton heap.
+-- insert is just merging with a singleton heap
 insert :: Ord p => p -> v -> PQ p v -> PQ p v
 insert p v h = merge (Node 1 p v Empty Empty) h
 

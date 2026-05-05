@@ -2,6 +2,7 @@ module LCP where
 
 import Types
 import Parsers
+import qualified PriorityQueue as PQ
 
 import System.IO
 import Data.List
@@ -121,8 +122,8 @@ getBiasedMiddleVertex seed vs =
         shuffled  = shuffle seed weighted
     in head shuffled
 
-dijkstra :: AdjacencyMap -> Connection -> (S.Set Vertex) -> Maybe Path
-dijkstra adj (Connection start end) toOmit = go [(start,0,[start])] S.empty
+dijkstra2 :: AdjacencyMap -> Connection -> (S.Set Vertex) -> Maybe Path
+dijkstra2 adj (Connection start end) toOmit = go [(start,0,[start])] S.empty
   where
     go [] _ = Nothing
     go ((curPos,curCost,curPath):queue) visited
@@ -142,5 +143,72 @@ dijkstra adj (Connection start end) toOmit = go [(start,0,[start])] S.empty
                                        (neighborVertex, curCost+edgeWeight, neighborVertex:curPath)
                                        accQueue
 
+dijkstra :: AdjacencyMap -> Connection -> S.Set Vertex -> Maybe Path
+dijkstra adj (Connection start end) toOmit =
+    go (PQ.insert 0 start PQ.empty) (M.singleton start 0) M.empty
+  where
+    go :: PQ.PQ Float Vertex
+       -> M.Map Vertex Float
+       -> M.Map Vertex Vertex
+       -> Maybe Path
+    go queue dist predMap =
+      case PQ.popMin queue of
+        Nothing -> Nothing
 
+        Just ((curCost, curPos), queue') ->
+          case M.lookup curPos dist of
+            Nothing ->
+              go queue' dist predMap
 
+            Just bestCost
+              | curCost > bestCost ->
+                  go queue' dist predMap
+
+              | curPos == end ->
+                  case reconstructPath predMap start end of
+                    Nothing   -> Nothing
+                    Just path -> Just (path, curCost)
+
+              | otherwise ->
+                  let neighbors = getNeighborsWithCost adj curPos
+                      (queue'', dist', predMap') =
+                        foldl (relax curPos curCost) (queue', dist, predMap) neighbors
+                  in go queue'' dist' predMap'
+
+    relax :: Vertex
+          -> Float
+          -> (PQ.PQ Float Vertex, M.Map Vertex Float, M.Map Vertex Vertex)
+          -> (Vertex, Float)
+          -> (PQ.PQ Float Vertex, M.Map Vertex Float, M.Map Vertex Vertex)
+    relax curPos curCost (queue, dist, predMap) (neighbor, edgeWeight)
+      | S.member neighbor toOmit = (queue, dist, predMap)
+      | otherwise =
+          let newCost = curCost + edgeWeight
+          in case M.lookup neighbor dist of
+               Nothing ->
+                 ( PQ.insert newCost neighbor queue
+                 , M.insert neighbor newCost dist
+                 , M.insert neighbor curPos predMap
+                 )
+
+               Just oldCost ->
+                 if newCost < oldCost
+                 then ( PQ.insert newCost neighbor queue
+                      , M.insert neighbor newCost dist
+                      , M.insert neighbor curPos predMap
+                      )
+                 else (queue, dist, predMap)
+
+reconstructPath :: M.Map Vertex Vertex -> Vertex -> Vertex -> Maybe [Vertex]
+reconstructPath predMap start end = fmap reverse (go end)
+  where
+    go v
+      | v == start = Just [start]
+      | otherwise =
+          case M.lookup v predMap of
+            Nothing -> Nothing
+            Just p  ->
+              case go p of
+                Nothing -> Nothing
+                Just vs -> Just (v : vs)
+                
