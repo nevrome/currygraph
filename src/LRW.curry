@@ -57,21 +57,36 @@ randomWalksForVertices h adj focalVs nrWalks maybeSeed = do
     mapM_ (\(v, perFocalSeed) -> do
         --putStrLn $ show v
         --hFlush stdout
-        let walks = map (\w -> makeRandomWalk adj v (perFocalSeed + w) w) [1..nrWalks]
-        mapM_ (writeWalk h v ) walks
+        let walks = map (\w -> (w, makeRandomWalk adj (perFocalSeed + w) 5 v)) [1..nrWalks]
+        mapM_ (writeWalk h v) walks
       ) $ zip focalVs perFocalSeeds
 
-type Walk = (Int, [Vertex], Float)
+type Walk = ([Vertex], Float)
 
-writeWalk :: Handle -> Vertex -> Walk -> IO ()
-writeWalk h v (nrWalk, vs,cost) =
+writeWalk :: Handle -> Vertex -> (Int, Walk) -> IO ()
+writeWalk h v (nrWalk, (vs, cost)) =
     hPutStrLn h $ intercalate "," [show v, show nrWalk, show cost, showVertexSequence vs]
 showVertexSequence :: [Vertex] -> String
 showVertexSequence = intercalate ";" . map show
 
-makeRandomWalk :: AdjacencyMap -> Vertex -> Int -> Int -> Walk
-makeRandomWalk adj focalV seed nrWalk = undefined
-    
-
+makeRandomWalk :: AdjacencyMap -> Int -> Int -> Vertex -> Walk
+makeRandomWalk adj seed n start = walk (nextInt seed) start n
+  where
+    walk :: [Int] -> Vertex -> Int -> ([Vertex], Float)
+    walk (s:ss) current stepsLeft =
+        if stepsLeft < 1
+        -- no steps left
+        then ([current], 0.0)
+        -- still steps to go
+        else case getNeighborsWithCost adj current of
+            -- no neighbours available
+            [] -> ([current], 0.0)
+            -- neighbours there
+            neighbours ->
+              -- draw random neighbour and move one step
+              let ix = head (nextIntRange s (length neighbours))
+                  (nextV, edgeCost) = neighbours !! ix
+                  (restPath, restCost) = walk ss nextV (stepsLeft - 1)
+              in (current:restPath, edgeCost + restCost)
 
 
