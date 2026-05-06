@@ -94,6 +94,13 @@ parseOutFileBFS =
 parseOutFileLRW =
     OP.option (\s a -> Right $ a {com = LRW (lrwOpts a) {lrwOutFile = s}}) docOutFile
 
+docNrEdges :: OP.Mod
+docNrEdges = OP.long "nrEdges"
+            OP.<> OP.metavar "INT"
+            OP.<> OP.help "Number of edges that should be walked for each random walk. Default: 20."
+parseNrEdgesLRW =
+    OP.option (\s a -> Right $ a {com = LRW (lrwOpts a) {lrwNrEdges = read s}}) docNrEdges
+
 docNrPaths :: OP.Mod
 docNrPaths = OP.long "nrPaths"
             OP.<> OP.metavar "INT"
@@ -116,10 +123,6 @@ docVerbose :: OP.Mod
 docVerbose = OP.long "verbose"
              OP.<> OP.short "v"
              OP.<> OP.help "Should the CLI output be more informative? Default: False."
---parseVerboseLCP =
---    OP.flag (\a -> Right $ a {com = LCP (lcpOpts a) {lcpVerbose = True}}) docVerbose
---parseOutFileBFS =
---    OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsOutFile = s}}) docOutFile
 
 docDestFile :: OP.Mod
 docDestFile = OP.long "destFile"
@@ -130,8 +133,6 @@ parseDestFileLCP =
     OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpDestFile = Just s}}) docDestFile
 parseDestFileBFS =
     OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsDestFile = s}}) docDestFile
-
--- only lcp
 
 docConnectionFile :: OP.Mod
 docConnectionFile = OP.long "connectionFile"
@@ -151,8 +152,6 @@ readOmissionStrategy :: String -> OmissionStrategy
 readOmissionStrategy "none" = OmitNone
 readOmissionStrategy "omit" = OmitDests
 readOmissionStrategy "filter" = FilterInHindsight
-
--- only bfs
 
 docNrMinDests :: OP.Mod
 docNrMinDests = OP.long "minDests"
@@ -175,10 +174,6 @@ docStopAtDests = OP.long "stopAtDests"
             OP.<> OP.help "Should the search wave stop at a discovered destination?"
 parseStopAtDests =
     OP.flag (\a -> Right $ a {com = BFS (bfsOpts a) {bfsStopAtDests = True}}) docStopAtDests
-
--- only lrw
-
-
 
 -- combining parsers
 
@@ -206,11 +201,12 @@ cmdParser = OP.optParser $
             <.> parseStopAtDests
             <.> parseOutFileBFS
         ) OP.<|>
-        OP.command "lrw" (OP.help "...")
+        OP.command "lrw" (OP.help "Random walks from focal vertices.")
             (\a -> Right $ a { com = LRW (lrwOpts a) }) (
                 parseVertFileLRW
             <.> parseEdgeFileLRW
             <.> parseFocalVertFileLRW
+            <.> parseNrEdgesLRW
             <.> parseNrPathsLRW
             <.> parseSeedLRW
             <.> parseOutFileLRW
@@ -229,7 +225,7 @@ bfsOpts s = case com s of
 lrwOpts :: Options -> LRWOptions
 lrwOpts s = case com s of
   LRW opts -> opts
-  _        -> LRWOptions "" "" "" 1 Nothing ""
+  _        -> LRWOptions "" "" "" 20 1 Nothing ""
 
 
 

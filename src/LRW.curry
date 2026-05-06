@@ -15,6 +15,7 @@ data LRWOptions = LRWOptions {
       lrwVertFile :: String
     , lrwEdgeFile :: String
     , lrwFocalVertFile :: String
+    , lrwNrEdges :: Int
     , lrwNrPaths :: Int
     , lrwSeed :: Maybe Int
     , lrwOutFile :: String
@@ -24,7 +25,7 @@ runLRW :: LRWOptions -> IO ()
 runLRW (
     LRWOptions
     vertFile edgeFile focalVertFile
-    nrPaths maybeSeed
+    nrEdges nrPaths maybeSeed
     outFile
     ) = do
     putStrLn "Reading data..."
@@ -41,25 +42,27 @@ runLRW (
     putStrLn "Walking..."
     h <- openFile outFile WriteMode
     hPutStrLn h "v,num_path,sum_cost,path" -- csv header
-    randomWalksForVertices h adj focalVertices nrPaths maybeSeed
+    randomWalksForVertices h adj focalVertices nrEdges nrPaths maybeSeed
     hFlush h
     hClose h
     putStrLn "Done"
     
 randomWalksForVertices :: Handle
                           -> AdjacencyMap -> [Vertex]
-                          -> Int -> (Maybe Int) -> IO ()
-randomWalksForVertices h adj focalVs nrWalks maybeSeed = do
+                          -> Int -> Int -> (Maybe Int)
+                          -> IO ()
+randomWalksForVertices h adj focalVs nrEdges nrWalks maybeSeed = do
     seed <- case maybeSeed of
         Nothing -> getRandomSeed
         Just x -> return x
-    let perFocalSeeds = take (length focalVs) $ nextInt seed
-    mapM_ (\(v, perFocalSeed) -> do
-        --putStrLn $ show v
-        --hFlush stdout
-        let walks = map (\w -> (w, makeRandomWalk adj (perFocalSeed + w) 5 v)) [1..nrWalks]
+    let nrFocals = length focalVs
+        perFocalSeeds = take nrFocals $ nextInt seed
+    mapM_ (\(i, v, perFocalSeed) -> do
+        putStrLn $ "Vertex: " ++ show v ++ " (" ++ show i ++ "/" ++ show nrFocals ++ ")"
+        hFlush stdout
+        let walks = map (\w -> (w, makeRandomWalk adj (perFocalSeed + w) nrEdges v)) [1..nrWalks]
         mapM_ (writeWalk h v) walks
-      ) $ zip focalVs perFocalSeeds
+      ) $ zip3 [1..length focalVs] focalVs perFocalSeeds
 
 type Walk = ([Vertex], Float)
 
