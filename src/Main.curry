@@ -3,6 +3,7 @@ module Main where
 import LCP
 import BFS
 import LRW
+import Draw
 
 import Data.List
 import Data.Maybe
@@ -19,6 +20,7 @@ data Command =
     | LCP LCPOptions
     | BFS BFSOptions
     | LRW LRWOptions
+    | Draw DrawOptions
 
 defaultOptions :: Options
 defaultOptions = Options NoCommand
@@ -43,9 +45,10 @@ main = do
               Right opts -> runWithArgs opts
     
 runWithArgs :: Options -> IO ()
-runWithArgs (Options (LCP opts)) = runLCP opts
-runWithArgs (Options (BFS opts)) = runBFS opts
-runWithArgs (Options (LRW opts)) = runLRW opts
+runWithArgs (Options (LCP opts))  = runLCP opts
+runWithArgs (Options (BFS opts))  = runBFS opts
+runWithArgs (Options (LRW opts))  = runLRW opts
+runWithArgs (Options (Draw opts)) = runDraw opts
 
 -- parsers
 
@@ -61,6 +64,8 @@ parseVertFileBFS =
     OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsVertFile = s}}) docVertFile
 parseVertFileLRW =
     OP.option (\s a -> Right $ a {com = LRW (lrwOpts a) {lrwVertFile = s}}) docVertFile
+parseVertFileDraw =
+    OP.option (\s a -> Right $ a {com = Draw (drawOpts a) {drawVertFile = s}}) docVertFile
 
 docFocalVertFile :: OP.Mod
 docFocalVertFile = OP.long "focalVertFile"
@@ -81,18 +86,22 @@ parseEdgeFileBFS =
     OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsEdgeFile = s}}) docEdgeFile
 parseEdgeFileLRW =
     OP.option (\s a -> Right $ a {com = LRW (lrwOpts a) {lrwEdgeFile = s}}) docEdgeFile
+parseEdgeFileDraw =
+    OP.option (\s a -> Right $ a {com = Draw (drawOpts a) {drawEdgeFile = s}}) docEdgeFile
 
 docOutFile :: OP.Mod
 docOutFile = OP.long "outFile"
             OP.<> OP.short "o"
             OP.<> OP.metavar "PATH"
-            OP.<> OP.help "File path to where the output .csv file should be written."
+            OP.<> OP.help "File path to where the output file should be written."
 parseOutFileLCP =
     OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpOutFile = s}}) docOutFile
 parseOutFileBFS =
     OP.option (\s a -> Right $ a {com = BFS (bfsOpts a) {bfsOutFile = s}}) docOutFile
 parseOutFileLRW =
     OP.option (\s a -> Right $ a {com = LRW (lrwOpts a) {lrwOutFile = s}}) docOutFile
+parseOutFileDraw =
+    OP.option (\s a -> Right $ a {com = Draw (drawOpts a) {drawOutFile = s}}) docOutFile
 
 docNrEdges :: OP.Mod
 docNrEdges = OP.long "nrEdges"
@@ -210,6 +219,12 @@ cmdParser = OP.optParser $
             <.> parseNrPathsLRW
             <.> parseSeedLRW
             <.> parseOutFileLRW
+        ) OP.<|>
+        OP.command "draw" (OP.help "Render graphs in GraphViz's DOT language.")
+            (\a -> Right $ a { com = LRW (lrwOpts a) }) (
+                parseVertFileDraw
+            <.> parseEdgeFileDraw
+            <.> parseOutFileDraw
         )
     )
 
@@ -226,6 +241,10 @@ lrwOpts :: Options -> LRWOptions
 lrwOpts s = case com s of
   LRW opts -> opts
   _        -> LRWOptions "" "" "" 20 1 Nothing ""
+drawOpts :: Options -> DrawOptions
+drawOpts s = case com s of
+  Draw opts -> opts
+  _         -> DrawOptions "" "" ""
 
 
 
