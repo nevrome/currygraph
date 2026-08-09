@@ -37,10 +37,13 @@ runDraw (
     putStrLn "Done"
 
 vertex2GVNode :: Vertex -> GV.Node
-vertex2GVNode (Vertex i) = GV.Node (show i) []
+vertex2GVNode (Vertex i Nothing) =
+    GV.Node (show i) []
+vertex2GVNode (Vertex i (Just (SpatPos long lat))) =
+    GV.Node (show i) [("long", show long), ("lat", show lat)]
 
 edge2GVEdge :: Edge -> GV.Edge
-edge2GVEdge (Edge (Vertex i1) (Vertex i2) c) =
+edge2GVEdge (Edge (Vertex i1 _) (Vertex i2 _) c) =
     GV.Edge (show i1) (show i2) [("cost", show c)]
 
 

@@ -11,7 +11,7 @@ infinity = 1.0 / 0.0
 type VertexMap = M.Map Int Vertex
 
 buildVertexMap :: [Vertex] -> VertexMap
-buildVertexMap vertices = M.fromList $ map (\v@(Vertex i) -> (i, v)) vertices
+buildVertexMap vertices = M.fromList $ map (\v@(Vertex i _) -> (i, v)) vertices
 findVertexUnsafe :: VertexMap -> Int -> Vertex
 findVertexUnsafe vm voi = fromJust $ M.lookup voi vm
 
@@ -51,13 +51,19 @@ data Connection = Connection Vertex Vertex -- v1 v2
 makeConnection :: Vertex -> Vertex -> Connection
 makeConnection v1 v2 = Connection v1 v2
 
-data Vertex = Vertex Int
+data Vertex = Vertex Int (Maybe SpatPos)
 
 instance Show Vertex where
-    show (Vertex v) = show v
+    show (Vertex v _) = show v
 instance Eq Vertex where
-    (Vertex v1) == (Vertex v2) = v1 == v2
+    (Vertex v1 _) == (Vertex v2 _) = v1 == v2
 instance Ord Vertex where
-  compare (Vertex v1) (Vertex v2) = compare v1 v2
-makeVertex :: String -> Vertex
-makeVertex v = Vertex (read v)
+  compare (Vertex v1 _) (Vertex v2 _) = compare v1 v2
+makeVertex :: String -> Maybe SpatPos -> Vertex
+makeVertex v sp = Vertex (read v) sp
+
+data SpatPos = SpatPos Float Float -- long lat
+    deriving (Show, Eq)
+makeSpatPos :: String -> String -> SpatPos
+makeSpatPos long lat = SpatPos (read long) (read lat)
+

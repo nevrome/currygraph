@@ -11,9 +11,14 @@ import qualified Data.Map as M
 readVertices :: String -> IO [Vertex]
 readVertices path = do
     header:rows <- readCSVFile path
-    let colID = getCol "id" header rows
-    let vertices = map makeVertex colID
-    return vertices
+    let colIDs = getCol "id" header rows
+        maybeLongs = getColOptional "long" header rows
+        maybeLats = getColOptional "lat" header rows
+    case (maybeLongs, maybeLats) of
+        (Just longs, Just lats) ->
+            let spatposs = map (\(lo,la) -> makeSpatPos lo la) $ zip longs lats
+            in return $ map (\(i,pos) -> makeVertex i (Just pos)) $ zip colIDs spatposs
+        _ -> return $ map (\i -> makeVertex i Nothing) colIDs
 
 zipWith4 :: (a -> b -> c -> d -> e) -> [a] -> [b] -> [c] -> [d] -> [e]
 zipWith4 _ []     _      _      _      = []
@@ -45,12 +50,14 @@ readConnections path verticesMap = do
 
 getCol :: String -> [String] -> [[String]] -> [String]
 getCol colName header rows =
-    let colNum = getColNum colName header
+    let colNum = fromJust $ getColNum colName header
     in map (\row -> row !! colNum) rows
-    where
-        getColNum :: String -> [String] -> Int
-        getColNum colName header = fromJust $ findIndex (\x -> x == colName) header 
 
+getColOptional :: String -> [String] -> [[String]] -> Maybe [String]
+getColOptional colName header rows =
+    case getColNum colName header of
+        Nothing -> Nothing
+        Just colNum -> Just $ map (\row -> row !! colNum) rows
 
-
-
+getColNum :: String -> [String] -> Maybe Int
+getColNum colName header = findIndex (\x -> x == colName) header 
