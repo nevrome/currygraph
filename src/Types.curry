@@ -43,7 +43,17 @@ getNeighborsWithCost adj v = M.findWithDefault [] v adj
 data Path = Path [Vertex] Float -- [v1, v2, v3, ...] total cost
     deriving (Show, Eq)
 makePath :: [Vertex] -> String -> Path
-makePath p cost = Path p (read cost)
+makePath vs cost = Path vs (read cost)
+
+isVertexInPath :: Path -> Vertex -> Bool
+isVertexInPath (Path vs _) v = v `elem` vs
+isEdgeInPath :: Path -> Edge -> Bool
+isEdgeInPath (Path vs _) (Edge v1 v2 _) =
+    any isMatchingEdge (zip vs (tail vs))
+    where
+      isMatchingEdge (from, to) =
+        (from == v1 && to == v2) ||
+        (from == v2 && to == v1)
 
 data Edge = Edge Vertex Vertex Float -- v1 v2 cost
     deriving (Show, Eq)
