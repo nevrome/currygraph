@@ -10,13 +10,14 @@ import qualified Data.Map as M
 data DrawOptions = DrawOptions {
       drawVertFile :: String
     , drawEdgeFile :: String
+    , drawPathFile :: Maybe String
     , drawOutFile :: String
 } deriving Show
 
 runDraw :: DrawOptions -> IO ()
 runDraw (
     DrawOptions
-    vertFile edgeFile outFile
+    vertFile edgeFile maybePathFile outFile
     ) = do
     putStrLn "Reading data..."
     vertices <- readVertices vertFile
@@ -24,6 +25,12 @@ runDraw (
     putStrLn $ "Vertices: " ++ show (M.size vm)
     edges <- readEdges edgeFile vm
     putStrLn $ "Edges: " ++ show (length edges)
+    paths <- case maybePathFile of
+        Nothing -> return []
+        Just pathFile -> do
+            ps <- readPaths pathFile vm
+            putStrLn $ "Paths: " ++ show (length ps)
+            return ps
     putStrLn "Preparing GraphViz data types..."
     let gvNodes = map vertex2GVNode vertices
         gvEdges = map edge2GVEdge edges

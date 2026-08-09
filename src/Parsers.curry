@@ -48,6 +48,15 @@ readConnections path verticesMap = do
     let connections = zipWith makeConnection verticesV1 verticesV2
     return connections
 
+readPaths :: String -> VertexMap -> IO [Path]
+readPaths path verticesMap = do
+    header:rows <- readCSVFile path
+    let colPaths = getCol "path" header rows
+        pathVertices = map (\p -> map (findVertexUnsafe verticesMap . read) $ splitOn ";" p) colPaths
+        colCosts = getCol "sum_cost" header rows
+    let paths = zipWith makePath pathVertices colCosts
+    return paths
+
 getCol :: String -> [String] -> [[String]] -> [String]
 getCol colName header rows =
     let colNum = fromJust $ getColNum colName header

@@ -40,6 +40,10 @@ getNeighbors adj v = map fst $ M.findWithDefault [] v adj
 getNeighborsWithCost :: AdjacencyMap -> Vertex -> [(Vertex,Float)]
 getNeighborsWithCost adj v = M.findWithDefault [] v adj
 
+data Path = Path [Vertex] Float -- [v1, v2, v3, ...] total cost
+    deriving (Show, Eq)
+makePath :: [Vertex] -> String -> Path
+makePath p cost = Path p (read cost)
 
 data Edge = Edge Vertex Vertex Float -- v1 v2 cost
     deriving (Show, Eq)

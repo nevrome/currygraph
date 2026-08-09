@@ -107,6 +107,13 @@ parseEdgeFileBFS = bfsOption (\s o -> o { bfsEdgeFile = s }) docEdgeFile
 parseEdgeFileLRW = lrwOption (\s o -> o { lrwEdgeFile = s }) docEdgeFile
 parseEdgeFileDraw = drawOption (\s o -> o { drawEdgeFile = s }) docEdgeFile
 
+docPathFile :: OP.Mod
+docPathFile = OP.long "pathFile"
+            OP.<> OP.short "p"
+            OP.<> OP.metavar "PATH"
+            OP.<> OP.help ".csv file. One row for each path, columns: path, sum_cost."
+parsePathFileDraw = drawOption (\s o -> o { drawPathFile = Just s }) docPathFile
+
 docOutFile :: OP.Mod
 docOutFile = OP.long "outFile"
             OP.<> OP.short "o"
@@ -221,6 +228,7 @@ cmdParser = OP.optParser $
             (\a -> Right $ a { com = Draw (drawOpts a) }) (
                 parseVertFileDraw
             <.> parseEdgeFileDraw
+            <.> parsePathFileDraw
             <.> parseOutFileDraw
         )
     )
@@ -241,7 +249,7 @@ lrwOpts s = case com s of
 drawOpts :: Options -> DrawOptions
 drawOpts s = case com s of
   Draw opts -> opts
-  _         -> DrawOptions "" "" ""
+  _         -> DrawOptions "" "" Nothing ""
 
 
 
