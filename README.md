@@ -20,3 +20,11 @@ in the root directory of this repository after installing the respective compile
 This will compile the main module and install the currygraph executable in `$HOME/.cpm/bin`.
 
 Run `currygraph -h` to access the command line help.
+
+For faster compilation in the development loop you can run
+
+```
+cypm install --exec
+```
+
+which installs the currygraph executable only and does not re-install dependencies.

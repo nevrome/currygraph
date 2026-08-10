@@ -84,12 +84,10 @@ pathsForConnections h adj cons omissionStrategy dests nrPaths maybeSeed = do
       ) $ zip cons rands
 
 shouldBeOmitted :: (S.Set Vertex) -> Path -> Bool
-shouldBeOmitted toOmit (vs,_) = any (\v -> S.member v toOmit) vs
-
-type Path = ([Vertex], Float)
+shouldBeOmitted toOmit (Path vs _) = any (\v -> S.member v toOmit) vs
 
 writePath :: Handle -> Connection -> Path -> IO ()
-writePath h (Connection v1 v2) (vs,cost) =
+writePath h (Connection v1 v2) (Path vs cost) =
     hPutStrLn h $ intercalate "," [show v1, show v2, show cost, showPath vs]
 showPath :: [Vertex] -> String
 showPath = intercalate ";" . map show
@@ -100,7 +98,7 @@ dijkstraMulti adj con acc toOmit nrPaths seed =
     case dijkstra adj con toOmit of
         Nothing -> do
             dijkstraMulti adj con acc toOmit (nrPaths-1) (seed+1)
-        Just p@(vertices,_) -> do
+        Just p@(Path vertices _) -> do
             let verticesWithoutStartEnd = tail $ init vertices
             -- remove all used vertices
             --let newAdj = removeVertices adj verticesWithoutStartEnd
@@ -126,7 +124,7 @@ dijkstra adj (Connection start end) toOmit = go [(start,0,[start])] S.empty
   where
     go [] _ = Nothing
     go ((curPos,curCost,curPath):queue) visited
-      | curPos == end = Just (reverse curPath, curCost)
+      | curPos == end = Just $ Path (reverse curPath) curCost
       | curPos `S.member` visited = go queue visited
       | otherwise =
           let neighbors     = getNeighborsWithCost adj curPos

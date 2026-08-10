@@ -11,7 +11,7 @@ infinity = 1.0 / 0.0
 type VertexMap = M.Map Int Vertex
 
 buildVertexMap :: [Vertex] -> VertexMap
-buildVertexMap vertices = M.fromList $ map (\v@(Vertex i) -> (i, v)) vertices
+buildVertexMap vertices = M.fromList $ map (\v@(Vertex i _) -> (i, v)) vertices
 findVertexUnsafe :: VertexMap -> Int -> Vertex
 findVertexUnsafe vm voi = fromJust $ M.lookup voi vm
 
@@ -40,6 +40,20 @@ getNeighbors adj v = map fst $ M.findWithDefault [] v adj
 getNeighborsWithCost :: AdjacencyMap -> Vertex -> [(Vertex,Float)]
 getNeighborsWithCost adj v = M.findWithDefault [] v adj
 
+data Path = Path [Vertex] Float -- [v1, v2, v3, ...] total cost
+    deriving (Show, Eq)
+makePath :: [Vertex] -> String -> Path
+makePath vs cost = Path vs (read cost)
+
+isVertexInPath :: Path -> Vertex -> Bool
+isVertexInPath (Path vs _) v = v `elem` vs
+isEdgeInPath :: Path -> Edge -> Bool
+isEdgeInPath (Path vs _) (Edge v1 v2 _) =
+    any isMatchingEdge (zip vs (tail vs))
+    where
+      isMatchingEdge (from, to) =
+        (from == v1 && to == v2) ||
+        (from == v2 && to == v1)
 
 data Edge = Edge Vertex Vertex Float -- v1 v2 cost
     deriving (Show, Eq)
@@ -51,13 +65,19 @@ data Connection = Connection Vertex Vertex -- v1 v2
 makeConnection :: Vertex -> Vertex -> Connection
 makeConnection v1 v2 = Connection v1 v2
 
-data Vertex = Vertex Int
+data Vertex = Vertex Int (Maybe SpatPos)
 
 instance Show Vertex where
-    show (Vertex v) = show v
+    show (Vertex v _) = show v
 instance Eq Vertex where
-    (Vertex v1) == (Vertex v2) = v1 == v2
+    (Vertex v1 _) == (Vertex v2 _) = v1 == v2
 instance Ord Vertex where
-  compare (Vertex v1) (Vertex v2) = compare v1 v2
-makeVertex :: String -> Vertex
-makeVertex v = Vertex (read v)
+  compare (Vertex v1 _) (Vertex v2 _) = compare v1 v2
+makeVertex :: String -> Maybe SpatPos -> Vertex
+makeVertex v sp = Vertex (read v) sp
+
+data SpatPos = SpatPos Float Float -- long lat
+    deriving (Show, Eq)
+makeSpatPos :: String -> String -> SpatPos
+makeSpatPos long lat = SpatPos (read long) (read lat)
+
