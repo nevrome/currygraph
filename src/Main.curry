@@ -113,7 +113,7 @@ parseNrPathsLRW =
 docSeed :: OP.Mod
 docSeed = OP.long "seed"
             OP.<> OP.metavar "INT"
-            OP.<> OP.help "Seed for random number gerneration. Default: Nothing."
+            OP.<> OP.help "Seed for random number generation. Default: Nothing."
 parseSeedLCP =
     OP.option (\s a -> Right $ a {com = LCP (lcpOpts a) {lcpSeed = Just $ read s}}) docSeed
 parseSeedLRW =
