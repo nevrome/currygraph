@@ -85,7 +85,7 @@ drawFlag = flagFor Draw drawOpts
 lcpOpts :: Options -> LCPOptions
 lcpOpts s = case com s of
   LCP opts -> opts
-  _        -> LCPOptions "" "" "" OmitNone Nothing 1 Nothing ""
+  _        -> LCPOptions "" "" "" OmitNone Nothing ""
 bfsOpts :: Options -> BFSOptions
 bfsOpts s = case com s of
   BFS opts -> opts
@@ -163,14 +163,12 @@ docNrPaths :: OP.Mod
 docNrPaths = OP.long "nrPaths"
             OP.<> OP.metavar "INT"
             OP.<> OP.help "Number of paths that should be computed for each connection. Default: 1."
-parseNrPathsLCP = lcpOption (\s o -> o { lcpNrPaths = read s }) docNrPaths
 parseNrPathsLRW = lrwOption (\s o -> o { lrwNrPaths = read s }) docNrPaths
 
 docSeed :: OP.Mod
 docSeed = OP.long "seed"
             OP.<> OP.metavar "INT"
             OP.<> OP.help "Seed for random number generation. Default: Nothing."
-parseSeedLCP = lcpOption (\s o -> o { lcpSeed = Just (read s) }) docSeed
 parseSeedLRW = lrwOption (\s o -> o { lrwSeed = Just (read s) }) docSeed
 
 docDestFile :: OP.Mod

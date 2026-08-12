@@ -17,8 +17,6 @@ data LCPOptions = LCPOptions {
     , lcpConnectionFile :: String
     , lcpOmissionStrategy :: OmissionStrategy
     , lcpDestFile :: Maybe String
-    , lcpNrPaths :: Int
-    , lcpSeed :: Maybe Int
     , lcpOutFile :: String
 }
 
@@ -29,7 +27,6 @@ runLCP (
     LCPOptions
     vertFile edgeFile connectionFile
     omissionStrategy maybeDestFile
-    nrPaths maybeSeed
     outFile
     ) = do
     putStrLn "Reading data..."
