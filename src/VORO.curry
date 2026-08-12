@@ -32,13 +32,13 @@ runVORO (
     let adj = buildAdjacencyMap edges
     putStrLn $ "Size adjacency map: " ++ show (M.size adj)
     verticesDest <- readVertices destFile
-    let verticesDestSet = S.fromList verticesDest
-    putStrLn $ "Destination vertices: " ++ show (S.size verticesDestSet)
+    putStrLn $ "Destination vertices: " ++ show (length verticesDest)
     putStrLn "Running multi-source Dijkstra..."
-    let voronoi = multiSourceDijkstra adj verticesDestSet
+    let voronoi = multiSourceDijkstra adj verticesDest
     putStrLn "Detecting adjacent Voronoi cells..."
     let candidates = voronoiConnections adj voronoi
     putStrLn $ "Found Connections: " ++ show (length candidates)
+    putStrLn "Writing connections..."
     writeConnections outFile candidates
     putStrLn "Done"
 
@@ -65,14 +65,13 @@ data ConnectionCandidate = ConnectionCandidate
     } deriving Show
 
 -- effectively a BFS from all destination vertices at the same time
-multiSourceDijkstra :: AdjacencyMap -> S.Set Vertex -> Voronoi
+multiSourceDijkstra :: AdjacencyMap -> [Vertex] -> Voronoi
 multiSourceDijkstra adj destinations =
-    go initialQueue initialOwners initialDistances M.empty
+    let initialQueue     = S.fromList [(0, d) | d <- destinations]
+        initialOwners    = M.fromList [(d, d) | d <- destinations]
+        initialDistances = M.fromList [(d, 0) | d <- destinations]
+    in go initialQueue initialOwners initialDistances M.empty
   where
-    destinationList = S.toList destinations
-    initialQueue = S.fromList [(0, d) | d <- destinationList]
-    initialOwners = M.fromList [(d, d) | d <- destinationList]
-    initialDistances = M.fromList [(d, 0) | d <- destinationList]
     go queue owners distances parents =
         case setMinView queue of
             Nothing -> Voronoi owners distances parents
@@ -85,9 +84,10 @@ multiSourceDijkstra adj destinations =
                             let currentOwner = fromJust $ M.lookup current owners
                                 neighbors = getNeighborsWithCost adj current
                                 (newQueue, newOwners, newDistances, newParents) =
-                                    foldl (relax current currentOwner currentDistance)                                                    (queueWithoutCurrent, owners, distances, parents) neighbors
+                                    foldl (assignNeighborToRegion current currentOwner currentDistance)
+                                          (queueWithoutCurrent, owners, distances, parents) neighbors
                             in go newQueue newOwners newDistances newParents
-    relax current currentOwner currentDistance (queue, owners, distances, parents) (neighbor, edgeCost) =
+    assignNeighborToRegion current currentOwner currentDistance (queue, owners, distances, parents) (neighbor, edgeCost) =
         let alternativeDistance = currentDistance + edgeCost
         in case M.lookup neighbor distances of
             Nothing ->
@@ -107,14 +107,13 @@ multiSourceDijkstra adj destinations =
 
 setMinView :: Ord a => S.Set a -> Maybe (a, S.Set a)
 setMinView set =
-    case S.toList set of
+    case S.toList set of -- toList returns an ordered (!) list, so that's why x is the minimum
         []  -> Nothing
         x:_ -> Just (x, S.delete x set)
 
--- inspect every graph edge: If its endpoints have different owners, the corresponding destination cells meet
+-- inspect every graph edge: if its endpoints have different owners, the corresponding destination cells meet
 voronoiConnections :: AdjacencyMap -> Voronoi -> [ConnectionCandidate]
-voronoiConnections adj voronoi =
-    M.elems $ foldl addVertexEdges M.empty (M.toList adj)
+voronoiConnections adj voronoi = M.elems $ foldl addVertexEdges M.empty (M.toList adj)
   where
     addVertexEdges candidates (u, neighbors) = foldl (addCrossing u) candidates neighbors
     addCrossing u candidates (v, edgeCost) =
@@ -123,22 +122,20 @@ voronoiConnections adj voronoi =
              , M.lookup u (distanceOf voronoi)
              , M.lookup v (distanceOf voronoi)
              ) of
-            (Just ownerU, Just ownerV, Just distanceU, Just distanceV)
-                | ownerU /= ownerV ->
-                    let candidateCost = distanceU + edgeCost + distanceV
-                        candidate = makeCandidate ownerU ownerV candidateCost u v
-                        key = canonicalPair ownerU ownerV
-                    in M.insertWith chooseBetter key candidate candidates
+            (Just ownerU, Just ownerV, Just distanceU, Just distanceV) | ownerU /= ownerV ->
+                let candidateCost = distanceU + edgeCost + distanceV
+                    candidate = makeCandidate ownerU ownerV candidateCost u v
+                    key = canonicalPair ownerU ownerV
+                in M.insertWith chooseBetter key candidate candidates
             _ -> candidates
     chooseBetter new old
         | connectionCost new < connectionCost old = new
         | otherwise                               = old
 
--- helpers ensure that (a,b) and (b,a) are treated as the same connection
+-- helpers to ensure that (a,b) and (b,a) are treated as the same connection
 canonicalPair :: Vertex -> Vertex -> (Vertex, Vertex)
-canonicalPair a b
-    | a <= b    = (a, b)
-    | otherwise = (b, a)
+canonicalPair a b | a <= b    = (a, b)
+                  | otherwise = (b, a)
 
 makeCandidate :: Vertex -> Vertex -> Float -> Vertex -> Vertex -> ConnectionCandidate
 makeCandidate ownerU ownerV cost u v
