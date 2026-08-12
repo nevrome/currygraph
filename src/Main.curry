@@ -85,7 +85,7 @@ drawFlag = flagFor Draw drawOpts
 lcpOpts :: Options -> LCPOptions
 lcpOpts s = case com s of
   LCP opts -> opts
-  _        -> LCPOptions "" "" "" OmitNone Nothing ""
+  _        -> LCPOptions "" "" "" OmitNone Nothing (PenalizeUsedEdges 0.5) ""
 bfsOpts :: Options -> BFSOptions
 bfsOpts s = case com s of
   BFS opts -> opts
