@@ -3,6 +3,7 @@ module Main where
 import LCP
 import BFS
 import LRW
+import VORO
 import Draw
 
 import Data.List
@@ -20,6 +21,7 @@ data Command =
     | LCP LCPOptions
     | BFS BFSOptions
     | LRW LRWOptions
+    | VORO VOROOptions
     | Draw DrawOptions
 
 defaultOptions :: Options
@@ -48,6 +50,7 @@ runWithArgs :: Options -> IO ()
 runWithArgs (Options (LCP opts))  = runLCP opts
 runWithArgs (Options (BFS opts))  = runBFS opts
 runWithArgs (Options (LRW opts))  = runLRW opts
+runWithArgs (Options (VORO opts)) = runVORO opts
 runWithArgs (Options (Draw opts)) = runDraw opts
 
 -- generic parser constructors for command-specific options.
@@ -70,12 +73,35 @@ flagFor inject project update doc =
 lcpOption  = optionFor LCP  lcpOpts
 bfsOption  = optionFor BFS  bfsOpts
 lrwOption  = optionFor LRW  lrwOpts
+voroOption = optionFor VORO voroOpts
 drawOption = optionFor Draw drawOpts
 lcpFlag  = flagFor LCP  lcpOpts
 bfsFlag  = flagFor BFS  bfsOpts
 lrwFlag  = flagFor LRW  lrwOpts
+voroFlag = flagFor VORO voroOpts
 drawFlag = flagFor Draw drawOpts
 
+-- default settings
+lcpOpts :: Options -> LCPOptions
+lcpOpts s = case com s of
+  LCP opts -> opts
+  _        -> LCPOptions "" "" "" OmitNone Nothing 1 Nothing ""
+bfsOpts :: Options -> BFSOptions
+bfsOpts s = case com s of
+  BFS opts -> opts
+  _        -> BFSOptions "" "" "" 6 0 False ""
+lrwOpts :: Options -> LRWOptions
+lrwOpts s = case com s of
+  LRW opts -> opts
+  _        -> LRWOptions "" "" "" 20 1 Nothing ""
+voroOpts :: Options -> VOROOptions
+voroOpts s = case com s of
+  VORO opts -> opts
+  _         -> VOROOptions "" "" "" ""
+drawOpts :: Options -> DrawOptions
+drawOpts s = case com s of
+  Draw opts -> opts
+  _         -> DrawOptions "" "" Nothing ""
 
 -- parsers
 
@@ -88,6 +114,7 @@ docVertFile = OP.long "vertFile"
 parseVertFileLCP  = lcpOption (\s o -> o { lcpVertFile = s }) docVertFile
 parseVertFileBFS  = bfsOption (\s o -> o { bfsVertFile = s }) docVertFile
 parseVertFileLRW  = lrwOption (\s o -> o { lrwVertFile = s }) docVertFile
+parseVertFileVORO = voroOption (\s o -> o { voroVertFile = s }) docVertFile
 parseVertFileDraw = drawOption (\s o -> o { drawVertFile = s }) docVertFile
 
 docFocalVertFile :: OP.Mod
@@ -105,6 +132,7 @@ docEdgeFile = OP.long "edgeFile"
 parseEdgeFileLCP = lcpOption (\s o -> o { lcpEdgeFile = s }) docEdgeFile
 parseEdgeFileBFS = bfsOption (\s o -> o { bfsEdgeFile = s }) docEdgeFile
 parseEdgeFileLRW = lrwOption (\s o -> o { lrwEdgeFile = s }) docEdgeFile
+parseEdgeFileVORO = voroOption (\s o -> o { voroEdgeFile = s }) docEdgeFile
 parseEdgeFileDraw = drawOption (\s o -> o { drawEdgeFile = s }) docEdgeFile
 
 docPathFile :: OP.Mod
@@ -122,6 +150,7 @@ docOutFile = OP.long "outFile"
 parseOutFileLCP  = lcpOption (\s o -> o { lcpOutFile = s }) docOutFile
 parseOutFileBFS  = bfsOption (\s o -> o { bfsOutFile = s }) docOutFile
 parseOutFileLRW  = lrwOption (\s o -> o { lrwOutFile = s }) docOutFile
+parseOutFileVORO  = voroOption (\s o -> o { voroOutFile = s }) docOutFile
 parseOutFileDraw = drawOption (\s o -> o { drawOutFile = s }) docOutFile
 
 docNrEdges :: OP.Mod
@@ -151,6 +180,7 @@ docDestFile = OP.long "destFile"
             OP.<> OP.help ".csv file. One row for each focal/destination vertex, columns: id."
 parseDestFileLCP = lcpOption (\s o -> o { lcpDestFile = Just s }) docDestFile
 parseDestFileBFS = bfsOption (\s o -> o { bfsDestFile = s }) docDestFile
+parseDestFileVORO = voroOption (\s o -> o { voroDestFile = s }) docDestFile
 
 docConnectionFile :: OP.Mod
 docConnectionFile = OP.long "connectionFile"
@@ -203,7 +233,7 @@ cmdParser = OP.optParser $
             <.> parseSeedLCP
             <.> parseOutFileLCP
         ) OP.<|>
-        OP.command "bfs" (OP.help "Breadth-first search for the n-nearest neighbors on a graph \
+        OP.command "bfs" (OP.help "Breadth-first search for the k-nearest neighbors on a graph \
                                   \between a list of destination vertices.")
             (\a -> Right $ a { com = BFS (bfsOpts a) }) (
                 parseVertFileBFS
@@ -224,6 +254,14 @@ cmdParser = OP.optParser $
             <.> parseSeedLRW
             <.> parseOutFileLRW
         ) OP.<|>
+        OP.command "voro" (OP.help "Construct the graph-Voronoi diagram and use its Delaunay dual \
+                                   \to find connections between destination vertices.")
+          (\a -> Right $ a { com = VORO (voroOpts a) }) (
+                parseVertFileVORO
+            <.> parseEdgeFileVORO
+            <.> parseDestFileVORO
+            <.> parseOutFileVORO
+        ) OP.<|>
         OP.command "draw" (OP.help "Render graphs in GraphViz's DOT language.")
             (\a -> Right $ a { com = Draw (drawOpts a) }) (
                 parseVertFileDraw
@@ -232,28 +270,3 @@ cmdParser = OP.optParser $
             <.> parseOutFileDraw
         )
     )
-
--- default settings
-lcpOpts :: Options -> LCPOptions
-lcpOpts s = case com s of
-  LCP opts -> opts
-  _        -> LCPOptions "" "" "" OmitNone Nothing 1 Nothing ""
-bfsOpts :: Options -> BFSOptions
-bfsOpts s = case com s of
-  BFS opts -> opts
-  _        -> BFSOptions "" "" "" 6 0 False ""
-lrwOpts :: Options -> LRWOptions
-lrwOpts s = case com s of
-  LRW opts -> opts
-  _        -> LRWOptions "" "" "" 20 1 Nothing ""
-drawOpts :: Options -> DrawOptions
-drawOpts s = case com s of
-  Draw opts -> opts
-  _         -> DrawOptions "" "" Nothing ""
-
-
-
-
-
-
-
