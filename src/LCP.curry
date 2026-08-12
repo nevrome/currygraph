@@ -22,7 +22,7 @@ data LCPOptions = LCPOptions {
     , lcpOutFile :: String
 }
 
-data OmissionStrategy = OmitNone | OmitDests | FilterInHindsight
+data OmissionStrategy = OmitNone | OmitDests | Filter
 
 runLCP :: LCPOptions -> IO ()
 runLCP (
@@ -53,73 +53,35 @@ runLCP (
     putStrLn "Searching..."
     h <- openFile outFile WriteMode
     hPutStrLn h "v1,v2,sum_cost,path" -- csv header
-    pathsForConnections h adj connections omissionStrategy dests nrPaths maybeSeed
+    pathsForConnections h adj connections omissionStrategy dests
     hFlush h
     hClose h
     putStrLn "Done"
 
-pathsForConnections :: Handle
-                       -> AdjacencyMap -> [Connection]
-                       -> OmissionStrategy -> (S.Set Vertex)
-                       -> Int -> (Maybe Int) -> IO ()
-pathsForConnections h adj cons omissionStrategy dests nrPaths maybeSeed = do
-    seed <- case maybeSeed of
-        Nothing -> getRandomSeed
-        Just x -> return x
-    let rands = take (length cons) $ nextInt seed
-    mapM_ (\(con@(Connection start end), rand) -> do
-        putStrLn $ show con
+pathsForConnections :: Handle -> AdjacencyMap -> [Connection] -> OmissionStrategy -> (S.Set Vertex) -> IO ()
+pathsForConnections h adj cons omissionStrategy dests =
+    (flip mapM_) cons $ \con -> do
+        print con
         hFlush stdout
-        let toOmit = S.deleteAll [start, end] dests
-        paths <- case omissionStrategy of
-            OmitDests -> getOneValue $ dijkstraMulti adj con [] toOmit  nrPaths rand
-            otherwise -> getOneValue $ dijkstraMulti adj con [] S.empty nrPaths rand
-        case paths of
-            Nothing -> return ()
-            Just paths' -> do
-                let filteredPaths = case omissionStrategy of
-                        FilterInHindsight -> filter (\p -> not $ shouldBeOmitted toOmit p) paths'
-                        otherwise         -> paths'
-                mapM_ (writePath h con) $ filteredPaths
-      ) $ zip cons rands
+        case pathForConnection adj omissionStrategy dests con of
+            Nothing   -> pure ()
+            Just path -> writePath h con path
 
-shouldBeOmitted :: (S.Set Vertex) -> Path -> Bool
-shouldBeOmitted toOmit (Path vs _) = any (\v -> S.member v toOmit) vs
+pathForConnection :: AdjacencyMap -> OmissionStrategy -> S.Set Vertex -> Connection -> Maybe Path
+pathForConnection adj omissionStrategy dests con@(Connection start end) =
+    case omissionStrategy of
+        OmitNone  -> dijkstra adj con S.empty
+        OmitDests -> dijkstra adj con toOmit
+        Filter    -> dijkstra adj con S.empty >>= rejectInHindsight
+  where
+    toOmit = dests `S.difference` S.fromList [start, end]
+    rejectInHindsight path
+        | shouldBeOmitted toOmit path = Nothing
+        | otherwise                   = Just path
+    shouldBeOmitted :: (S.Set Vertex) -> Path -> Bool
+    shouldBeOmitted toOmit (Path vs _) = any (\v -> S.member v toOmit) vs
 
-writePath :: Handle -> Connection -> Path -> IO ()
-writePath h (Connection v1 v2) (Path vs cost) =
-    hPutStrLn h $ intercalate "," [show v1, show v2, show cost, showPath vs]
-showPath :: [Vertex] -> String
-showPath = intercalate ";" . map show
-
-dijkstraMulti :: AdjacencyMap -> Connection -> [Path] -> (S.Set Vertex) -> Int -> Int -> [Path]
-dijkstraMulti _ _ acc _ 0 _ = reverse acc
-dijkstraMulti adj con acc toOmit nrPaths seed =
-    case dijkstra adj con toOmit of
-        Nothing -> do
-            dijkstraMulti adj con acc toOmit (nrPaths-1) (seed+1)
-        Just p@(Path vertices _) -> do
-            let verticesWithoutStartEnd = tail $ init vertices
-            -- remove all used vertices
-            --let newAdj = removeVertices adj verticesWithoutStartEnd
-            -- remove random vertex
-            --let randomVertexToRemove = head $ shuffle seed verticesWithoutStartEnd
-            -- remove weighted random vertex
-            let randomVertexToRemove = getBiasedMiddleVertex seed verticesWithoutStartEnd
-                newAdj = removeVertices adj (S.singleton randomVertexToRemove)
-            dijkstraMulti newAdj con (p:acc) toOmit (nrPaths-1) (seed+1)
-
-getBiasedMiddleVertex :: Int -> [Vertex] -> Vertex
-getBiasedMiddleVertex seed vs =
-    let n         = length vs
-        midIndex  = n `div` 2
-        maxWeight = midIndex + 1
-        -- create weighted list: middle gets maxWeight copies, edges get fewer
-        weighted  = concat [ replicate (maxWeight - abs (i - midIndex)) v | (v,i) <- zip vs [0..] ]
-        shuffled  = shuffle seed weighted
-    in head shuffled
-
-dijkstra :: AdjacencyMap -> Connection -> (S.Set Vertex) -> Maybe Path
+dijkstra :: AdjacencyMap -> Connection -> S.Set Vertex -> Maybe Path
 dijkstra adj (Connection start end) toOmit = go [(start,0,[start])] S.empty
   where
     go [] _ = Nothing
@@ -139,3 +101,9 @@ dijkstra adj (Connection start end) toOmit = go [(start,0,[start])] S.empty
                 | otherwise = insertBy (\(_,c1,_) (_,c2,_) -> c1 < c2)
                                        (neighborVertex, curCost+edgeWeight, neighborVertex:curPath)
                                        accQueue
+
+writePath :: Handle -> Connection -> Path -> IO ()
+writePath h (Connection v1 v2) (Path vs cost) =
+    hPutStrLn h $ intercalate "," [show v1, show v2, show cost, showPath vs]
+showPath :: [Vertex] -> String
+showPath = intercalate ";" . map show

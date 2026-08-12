@@ -197,7 +197,7 @@ parseOmissionStrategy = lcpOption (\s o -> o { lcpOmissionStrategy = readOmissio
 readOmissionStrategy :: String -> OmissionStrategy
 readOmissionStrategy "none" = OmitNone
 readOmissionStrategy "omit" = OmitDests
-readOmissionStrategy "filter" = FilterInHindsight
+readOmissionStrategy "filter" = Filter
 
 docNrMinDests :: OP.Mod
 docNrMinDests = OP.long "minDests"
@@ -229,8 +229,6 @@ cmdParser = OP.optParser $
             <.> parseConnectionFile
             <.> parseOmissionStrategy
             <.> parseDestFileLCP
-            <.> parseNrPathsLCP
-            <.> parseSeedLCP
             <.> parseOutFileLCP
         ) OP.<|>
         OP.command "bfs" (OP.help "Breadth-first search for the k-nearest neighbors on a graph \
