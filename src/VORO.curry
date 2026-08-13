@@ -9,13 +9,12 @@ import Data.Maybe (fromJust)
 import System.IO
 import Data.List
 
-data VOROOptions = VOROOptions
-    { voroVertFile :: FilePath
+data VOROOptions = VOROOptions {
+      voroVertFile :: FilePath
     , voroEdgeFile :: FilePath
     , voroDestFile :: FilePath
     , voroOutFile  :: FilePath
-    }
-    deriving Show
+} deriving Show
 
 runVORO :: VOROOptions -> IO ()
 runVORO (

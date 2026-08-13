@@ -41,6 +41,7 @@ runBFS (
     let verticesDestSet = S.fromList verticesDest
     putStrLn $ "Destination vertices: " ++ show (S.size verticesDestSet)
     putStrLn "Searching..."
+    -- Warning: Unlike voro the output is not sorted currently!
     h <- openFile outFile WriteMode
     hPutStrLn h "v1,v2,sum_cost" -- csv header
     mapM_ (bfsNClosest h adj verticesDestSet nrMinDests incDestsByLayer stopAtDests) verticesDest
