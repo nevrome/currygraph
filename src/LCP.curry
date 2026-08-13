@@ -8,8 +8,6 @@ import Data.List
 import Data.Maybe (fromJust, catMaybes)
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Control.Search.AllValues
-import System.Random
 import Control.Monad (foldM_)
 
 data LCPOptions = LCPOptions {

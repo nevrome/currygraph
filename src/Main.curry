@@ -85,7 +85,7 @@ drawFlag = flagFor Draw drawOpts
 lcpOpts :: Options -> LCPOptions
 lcpOpts s = case com s of
   LCP opts -> opts
-  _        -> LCPOptions "" "" "" OmitNone Nothing (PenalizeUsedEdges 0.5) ""
+  _        -> LCPOptions "" "" "" OmitNone Nothing IgnoreCongestion ""
 bfsOpts :: Options -> BFSOptions
 bfsOpts s = case com s of
   BFS opts -> opts
@@ -197,6 +197,18 @@ readOmissionStrategy "none" = OmitNone
 readOmissionStrategy "omit" = OmitDests
 readOmissionStrategy "filter" = Filter
 
+docPenalizeCongestion :: OP.Mod
+docPenalizeCongestion = OP.long "penalizeCongestion"
+            OP.<> OP.metavar "FLOAT"
+            OP.<> OP.help "Extra cost with which to penalize previous use of paths \
+                          \when finding subsequent paths. Default: 0."
+parsePenalizeCongestion = lcpOption (\s o -> o { lcpCongestionStrategy = readPenalizeCongestion s }) docPenalizeCongestion
+readPenalizeCongestion :: String -> CongestionStrategy
+readPenalizeCongestion s =
+    case read s of
+      0.0 -> IgnoreCongestion
+      f   -> PenalizeUsedEdges f
+
 docNrMinDests :: OP.Mod
 docNrMinDests = OP.long "minDests"
             OP.<> OP.metavar "INT"
@@ -227,6 +239,7 @@ cmdParser = OP.optParser $
             <.> parseConnectionFile
             <.> parseOmissionStrategy
             <.> parseDestFileLCP
+            <.> parsePenalizeCongestion
             <.> parseOutFileLCP
         ) OP.<|>
         OP.command "bfs" (OP.help "Breadth-first search for the k-nearest neighbors on a graph \
