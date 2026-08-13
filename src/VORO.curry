@@ -7,6 +7,7 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.Maybe (fromJust)
 import System.IO
+import Data.List
 
 data VOROOptions = VOROOptions
     { voroVertFile :: FilePath
@@ -38,8 +39,10 @@ runVORO (
     putStrLn "Detecting adjacent Voronoi cells..."
     let candidates = voronoiConnections adj voronoi
     putStrLn $ "Found Connections: " ++ show (length candidates)
+    putStrLn "Sorting by cost and vertex id..."
+    let sortedCandidates = sortByCost candidates
     putStrLn "Writing connections..."
-    writeConnections outFile candidates
+    writeConnections outFile sortedCandidates
     putStrLn "Done"
 
 -- result of the multi-source shortest-path search
@@ -63,6 +66,15 @@ data ConnectionCandidate = ConnectionCandidate
     , boundaryFrom   :: Vertex
     , boundaryTo     :: Vertex
     } deriving Show
+
+sortByCost :: [ConnectionCandidate] -> [ConnectionCandidate]
+sortByCost xs = sortBy compareByCost xs
+  where
+    compareByCost (ConnectionCandidate from1 to1 c1 _ _)
+                  (ConnectionCandidate from2 to2 c2 _ _) =
+         c1 < c2
+      || (c1 == c2 && from1 < from2)
+      || (c1 == c2 && from1 == from2 && to1 <= to2)
 
 -- effectively a BFS from all destination vertices at the same time
 multiSourceDijkstra :: AdjacencyMap -> [Vertex] -> Voronoi
