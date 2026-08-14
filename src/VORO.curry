@@ -88,7 +88,7 @@ multiSourceDijkstra adj destinations =
             Nothing -> Voronoi owners distances parents
             Just ((currentDistance, current), queueWithoutCurrent) ->
                 case M.lookup current distances of
-                    Nothing -> go queueWithoutCurrent owners distances parents -- should normally not happen
+                    Nothing -> error "multiSourceDijkstra: queued vertex has no recorded distance"
                     Just bestKnownDistance
                         | currentDistance > bestKnownDistance -> go queueWithoutCurrent owners distances parents
                         | otherwise ->
