@@ -136,8 +136,8 @@ congestionPenalty (PenalizeUsedEdges penaltyPerUse) usage v1 v2 =
     let previousUses = M.findWithDefault 0 (edgeKey v1 v2) usage
     in penaltyPerUse * fromIntegral previousUses
 
-dijkstra :: AdjacencyMap -> Connection -> S.Set Vertex -> Maybe Path
-dijkstra adj (Connection start end) toOmit = go [(start,0,[start])] S.empty
+dijkstra :: AdjacencyMap -> Connection -> Maybe Path
+dijkstra adj (Connection start end) = go [(start,0,[start])] S.empty
   where
     go [] _ = Nothing
     go ((curPos,curCost,curPath):queue) visited
@@ -145,9 +145,7 @@ dijkstra adj (Connection start end) toOmit = go [(start,0,[start])] S.empty
       | curPos `S.member` visited = go queue visited
       | otherwise =
           let neighbors     = getNeighborsWithCost adj curPos
-              --updatedQueue = foldl update queue neighbors
-              neighborsOmit = filter (\(v,_) -> not (S.member v toOmit)) neighbors
-              updatedQueue = foldl update queue neighborsOmit
+              updatedQueue = foldl update queue neighbors
           in go updatedQueue (S.insert curPos visited)
           where
               update :: [(Vertex,Float,[Vertex])] -> (Vertex,Float) -> [(Vertex,Float,[Vertex])]
