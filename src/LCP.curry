@@ -10,6 +10,7 @@ import Data.Maybe (fromJust, catMaybes)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Control.Monad (foldM_)
+import Data.Functor.Const
 
 data LCPOptions = LCPOptions {
       lcpVertFile :: String
@@ -92,19 +93,18 @@ pathForConnection :: AdjacencyMap
                      -> Connection -> Maybe Path
 pathForConnection adj omissionStrategy dests congestionStrategy usage con@(Connection start end) =
     case omissionStrategy of
-        OmitNone  -> dijkstraCongested adj con S.empty congestionStrategy usage
-        OmitDests -> dijkstraCongested adj con toOmit congestionStrategy usage
-        Filter    -> dijkstraCongested adj con S.empty congestionStrategy usage >>= rejectInHindsight
+        OmitNone  -> dijkstraCongested adj con omitNothing congestionStrategy usage
+        OmitDests -> dijkstraCongested adj con isOmitted congestionStrategy usage
+        Filter    -> dijkstraCongested adj con omitNothing congestionStrategy usage >>= rejectInHindsight
   where
-    toOmit = dests `S.difference` S.fromList [start, end]
-    rejectInHindsight path
-        | shouldBeOmitted toOmit path = Nothing
-        | otherwise                   = Just path
-    shouldBeOmitted :: (S.Set Vertex) -> Path -> Bool
-    shouldBeOmitted toOmit (Path vs _) = any (\v -> S.member v toOmit) vs
+    rejectInHindsight path@(Path vs _)
+        | any isOmitted vs = Nothing
+        | otherwise        = Just path
+    isOmitted v = v /= start && v /= end && v `S.member` dests
+    omitNothing _ = False
 
-dijkstraCongested :: AdjacencyMap -> Connection -> S.Set Vertex -> CongestionStrategy -> EdgeUsage -> Maybe Path
-dijkstraCongested adj (Connection start end) toOmit congestionStrategy usage =
+dijkstraCongested :: AdjacencyMap -> Connection -> (Vertex -> Bool) -> CongestionStrategy -> EdgeUsage -> Maybe Path
+dijkstraCongested adj (Connection start end) isOmitted congestionStrategy usage =
     go (PQ.singleton (start, 0, 0, [start])) S.empty
   where
     -- queue entries: (current vertex, routing cost including congestion, real path cost, path)
@@ -115,11 +115,12 @@ dijkstraCongested adj (Connection start end) toOmit congestionStrategy usage =
       | curPos == end = Just $ Path (reverse curPath) realCost
       | curPos `S.member` visited = go queue visited
       | otherwise =
-          let neighbors = filter (\(v, _) -> not (v `S.member` toOmit)) $ getNeighborsWithCost adj curPos
+          let neighbors = getNeighborsWithCost adj curPos
               updatedQueue = foldl update queue neighbors
           in go updatedQueue (S.insert curPos visited)
       where
         update accQueue (neighborVertex, edgeWeight)
+          | isOmitted neighborVertex = accQueue
           | neighborVertex `S.member` visited = accQueue
           | otherwise = PQ.insertBy compareRouteCost newEntry accQueue
           where
@@ -137,6 +138,13 @@ congestionPenalty (PenalizeUsedEdges penaltyPerUse) usage v1 v2 =
     let previousUses = M.findWithDefault 0 (edgeKey v1 v2) usage
     in penaltyPerUse * fromIntegral previousUses
 
+writePath :: Handle -> Connection -> Path -> IO ()
+writePath h (Connection v1 v2) (Path vs cost) =
+    hPutStrLn h $ intercalate "," [show v1, show v2, show cost, showPath vs]
+showPath :: [Vertex] -> String
+showPath = intercalate ";" . map show
+
+-- this is just kept here for reference, when I need a pure, simple dijkstra implementation
 dijkstra :: AdjacencyMap -> Connection -> Maybe Path
 dijkstra adj (Connection start end) = go (PQ.singleton (start, 0, [start])) S.empty
   where
@@ -156,9 +164,3 @@ dijkstra adj (Connection start end) = go (PQ.singleton (start, 0, [start])) S.em
                                     (neighborVertex, curCost + edgeWeight, neighborVertex:curPath)
                                     accQueue
     compareCost (_, cost1, _) (_, cost2, _) = cost1 < cost2
-
-writePath :: Handle -> Connection -> Path -> IO ()
-writePath h (Connection v1 v2) (Path vs cost) =
-    hPutStrLn h $ intercalate "," [show v1, show v2, show cost, showPath vs]
-showPath :: [Vertex] -> String
-showPath = intercalate ";" . map show
