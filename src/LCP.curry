@@ -2,6 +2,7 @@ module LCP where
 
 import Types
 import Parsers
+import qualified PQueue as PQ
 
 import System.IO
 import Data.List
@@ -104,12 +105,13 @@ pathForConnection adj omissionStrategy dests congestionStrategy usage con@(Conne
 
 dijkstraCongested :: AdjacencyMap -> Connection -> S.Set Vertex -> CongestionStrategy -> EdgeUsage -> Maybe Path
 dijkstraCongested adj (Connection start end) toOmit congestionStrategy usage =
-    go [(start, 0, 0, [start])] S.empty
+    go (PQ.singleton (start, 0, 0, [start])) S.empty
   where
     -- queue entries: (current vertex, routing cost including congestion, real path cost, path)
-    go [] _ = Nothing
-    go ((curPos, routeCost, realCost, curPath):queue) visited
-        -- return the real graph cost, not the penalty-inflated cost
+    go queue visited = next (PQ.minViewBy compareRouteCost queue) visited
+    next Nothing _ = Nothing
+    next (Just ((curPos, routeCost, realCost, curPath), queue)) visited
+      -- return the real graph cost, not the penalty-inflated cost
       | curPos == end = Just $ Path (reverse curPath) realCost
       | curPos `S.member` visited = go queue visited
       | otherwise =
@@ -117,10 +119,9 @@ dijkstraCongested adj (Connection start end) toOmit congestionStrategy usage =
               updatedQueue = foldl update queue neighbors
           in go updatedQueue (S.insert curPos visited)
       where
-        update :: [(Vertex, Float, Float, [Vertex])] -> (Vertex, Float) -> [(Vertex, Float, Float, [Vertex])]
         update accQueue (neighborVertex, edgeWeight)
           | neighborVertex `S.member` visited = accQueue
-          | otherwise = insertBy compareRouteCost newEntry accQueue
+          | otherwise = PQ.insertBy compareRouteCost newEntry accQueue
           where
             newEntry =
                 ( neighborVertex
@@ -128,7 +129,7 @@ dijkstraCongested adj (Connection start end) toOmit congestionStrategy usage =
                 , realCost + edgeWeight
                 , neighborVertex : curPath
                 )
-        compareRouteCost (_, cost1, _, _) (_, cost2, _, _) = cost1 < cost2
+    compareRouteCost (_, cost1, _, _) (_, cost2, _, _) = cost1 < cost2
 
 congestionPenalty :: CongestionStrategy -> EdgeUsage -> Vertex -> Vertex -> Float
 congestionPenalty IgnoreCongestion _ _ _ = 0
@@ -137,23 +138,24 @@ congestionPenalty (PenalizeUsedEdges penaltyPerUse) usage v1 v2 =
     in penaltyPerUse * fromIntegral previousUses
 
 dijkstra :: AdjacencyMap -> Connection -> Maybe Path
-dijkstra adj (Connection start end) = go [(start,0,[start])] S.empty
+dijkstra adj (Connection start end) = go (PQ.singleton (start, 0, [start])) S.empty
   where
-    go [] _ = Nothing
-    go ((curPos,curCost,curPath):queue) visited
+    go queue visited = next (PQ.minViewBy compareCost queue) visited
+    next Nothing _ = Nothing
+    next (Just ((curPos, curCost, curPath), queue)) visited
       | curPos == end = Just $ Path (reverse curPath) curCost
       | curPos `S.member` visited = go queue visited
       | otherwise =
-          let neighbors     = getNeighborsWithCost adj curPos
+          let neighbors    = getNeighborsWithCost adj curPos
               updatedQueue = foldl update queue neighbors
           in go updatedQueue (S.insert curPos visited)
-          where
-              update :: [(Vertex,Float,[Vertex])] -> (Vertex,Float) -> [(Vertex,Float,[Vertex])]
-              update accQueue (neighborVertex, edgeWeight)
-                | neighborVertex `S.member` visited = accQueue
-                | otherwise = insertBy (\(_,c1,_) (_,c2,_) -> c1 < c2)
-                                       (neighborVertex, curCost+edgeWeight, neighborVertex:curPath)
-                                       accQueue
+      where
+        update accQueue (neighborVertex, edgeWeight)
+          | neighborVertex `S.member` visited = accQueue
+          | otherwise = PQ.insertBy compareCost
+                                    (neighborVertex, curCost + edgeWeight, neighborVertex:curPath)
+                                    accQueue
+    compareCost (_, cost1, _) (_, cost2, _) = cost1 < cost2
 
 writePath :: Handle -> Connection -> Path -> IO ()
 writePath h (Connection v1 v2) (Path vs cost) =
