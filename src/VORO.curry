@@ -2,9 +2,9 @@ module VORO where
 
 import Types
 import Parsers
+import qualified PQueue as PQ
 
 import qualified Data.Map as M
-import qualified Data.Set as S
 import Data.Maybe (fromJust)
 import System.IO
 import Data.List
@@ -78,13 +78,13 @@ sortByCost xs = sortBy compareByCost xs
 -- effectively a BFS from all destination vertices at the same time
 multiSourceDijkstra :: AdjacencyMap -> [Vertex] -> Voronoi
 multiSourceDijkstra adj destinations =
-    let initialQueue     = S.fromList [(0, d) | d <- destinations]
+    let initialQueue     = foldl (\queue d -> PQ.insertBy compareQueueEntry (0, d) queue) PQ.empty destinations
         initialOwners    = M.fromList [(d, d) | d <- destinations]
         initialDistances = M.fromList [(d, 0) | d <- destinations]
     in go initialQueue initialOwners initialDistances M.empty
   where
     go queue owners distances parents =
-        case setMinView queue of
+        case PQ.minViewBy compareQueueEntry queue of
             Nothing -> Voronoi owners distances parents
             Just ((currentDistance, current), queueWithoutCurrent) ->
                 case M.lookup current distances of
@@ -102,25 +102,21 @@ multiSourceDijkstra adj destinations =
         let alternativeDistance = currentDistance + edgeCost
         in case M.lookup neighbor distances of
             Nothing ->
-                ( S.insert (alternativeDistance, neighbor) queue
+                ( PQ.insertBy compareQueueEntry (alternativeDistance, neighbor) queue
                 , M.insert neighbor currentOwner owners
                 , M.insert neighbor alternativeDistance distances
                 , M.insert neighbor current parents
                 )
             Just oldDistance
                 | alternativeDistance < oldDistance ->
-                    ( S.insert (alternativeDistance, neighbor) queue
+                    ( PQ.insertBy compareQueueEntry (alternativeDistance, neighbor) queue
                     , M.insert neighbor currentOwner owners
                     , M.insert neighbor alternativeDistance distances
                     , M.insert neighbor current parents
                     )
                 | otherwise -> (queue, owners, distances, parents)
-
-setMinView :: Ord a => S.Set a -> Maybe (a, S.Set a)
-setMinView set =
-    case S.toList set of -- toList returns an ordered (!) list, so that's why x is the minimum
-        []  -> Nothing
-        x:_ -> Just (x, S.delete x set)
+    compareQueueEntry (distance1, vertex1) (distance2, vertex2) =
+        distance1 < distance2 || (distance1 == distance2 && vertex1 < vertex2)
 
 -- inspect every graph edge: if its endpoints have different owners, the corresponding destination cells meet
 voronoiConnections :: AdjacencyMap -> Voronoi -> [ConnectionCandidate]
