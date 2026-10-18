@@ -105,32 +105,36 @@ pathForConnection adj omissionStrategy dests congestionStrategy usage con@(Conne
 
 dijkstraCongested :: AdjacencyMap -> Connection -> (Vertex -> Bool) -> CongestionStrategy -> EdgeUsage -> Maybe Path
 dijkstraCongested adj (Connection start end) isOmitted congestionStrategy usage =
-    go (PQ.singleton (start, 0, 0, [start])) S.empty
+    go (PQ.singleton (start, 0, 0, [start], 0)) S.empty 1
   where
-    -- queue entries: (current vertex, routing cost including congestion, real path cost, path)
-    go queue visited = next (PQ.minViewBy compareRouteCost queue) visited
-    next Nothing _ = Nothing
-    next (Just ((curPos, routeCost, realCost, curPath), queue)) visited
+    -- queue entries: (current vertex, routing cost including congestion, real path cost, path, insertion serial)
+    go queue visited nextSerial = next (PQ.minViewBy compareRouteCost queue) visited nextSerial
+    next Nothing _ _ = Nothing
+    next (Just ((curPos, routeCost, realCost, curPath, _), queue)) visited nextSerial
       -- return the real graph cost, not the penalty-inflated cost
       | curPos == end = Just $ Path (reverse curPath) realCost
-      | curPos `S.member` visited = go queue visited
+      | curPos `S.member` visited = go queue visited nextSerial
       | otherwise =
           let neighbors = getNeighborsWithCost adj curPos
-              updatedQueue = foldl update queue neighbors
-          in go updatedQueue (S.insert curPos visited)
+              (updatedQueue, updatedSerial) = foldl update (queue, nextSerial) neighbors
+          in go updatedQueue (S.insert curPos visited) updatedSerial
       where
-        update accQueue (neighborVertex, edgeWeight)
-          | isOmitted neighborVertex = accQueue
-          | neighborVertex `S.member` visited = accQueue
-          | otherwise = PQ.insertBy compareRouteCost newEntry accQueue
+        update (accQueue, serial) (neighborVertex, edgeWeight)
+          | isOmitted neighborVertex = (accQueue, serial)
+          | neighborVertex `S.member` visited = (accQueue, serial)
+          | otherwise = (PQ.insertBy compareRouteCost newEntry accQueue, serial + 1)
           where
             newEntry =
                 ( neighborVertex
                 , routeCost + edgeWeight + congestionPenalty congestionStrategy usage curPos neighborVertex
                 , realCost + edgeWeight
                 , neighborVertex : curPath
+                , serial
                 )
-    compareRouteCost (_, cost1, _, _) (_, cost2, _, _) = cost1 < cost2
+    -- the serial preserves the input order and acts as a tie breaker
+    -- it is not technically necessary, but it makes the output more predictable (at the cost of some performance)
+    compareRouteCost (_, cost1, _, _, serial1) (_, cost2, _, _, serial2) =
+        cost1 < cost2 || (cost1 == cost2 && serial1 < serial2)
 
 congestionPenalty :: CongestionStrategy -> EdgeUsage -> Vertex -> Vertex -> Float
 congestionPenalty IgnoreCongestion _ _ _ = 0
