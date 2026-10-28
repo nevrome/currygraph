@@ -72,14 +72,79 @@ runLCP (
     hClose h
     putStrLn "Done"
 
-pathsForConnections :: Handle -> AdjacencyMap -> [Connection]
-                       -> OmissionStrategy -> (S.Set Vertex) -> CongestionStrategy
-                       -> IO ()
+pathsForConnections :: Handle -> AdjacencyMap -> [Connection] -> OmissionStrategy ->
+                       S.Set Vertex -> CongestionStrategy -> IO ()
 pathsForConnections h adj cons omissionStrategy dests congestionStrategy =
+    case (omissionStrategy, congestionStrategy) of
+        (OmitNone, IgnoreCongestion) -> pathsForConnectionsMany h adj cons
+        _ -> pathsForConnectionsSequential h adj cons omissionStrategy dests congestionStrategy
+
+pathsForConnectionsMany :: Handle -> AdjacencyMap -> [Connection] -> IO ()
+pathsForConnectionsMany h adj cons = do
+    let sourceGroups = M.toList groupedConnections
+    allPaths <- searchSources (length sourceGroups) 1 M.empty sourceGroups
+    mapM_ (writeConnection allPaths) cons
+  where
+    groupedConnections = foldl addConnection M.empty cons
+    addConnection groups (Connection start end) =
+        M.insertWith S.union start (S.singleton end) groups
+    searchSources _ _ paths [] = return paths
+    searchSources total current paths ((start, targets):remainingGroups) = do
+        putStr $ "Searching from vertex " ++ show start ++ " (" ++ show current ++ "/" ++ show total ++ ", " ++ show (S.size targets) ++ " destinations)"
+        hFlush stdout
+        let sourcePaths = dijkstraMany adj start targets
+        -- M.size forces the result sufficiently for the completion message to be printed
+        putStrLn $ ": " ++ show (M.size sourcePaths) ++ " paths found"
+        hFlush stdout
+        let paths' = M.foldrWithKey (addPathForDestination start) paths sourcePaths
+        searchSources total (current + 1) paths' remainingGroups
+    addPathForDestination start end path paths =
+        M.insert (start, end) path paths
+    writeConnection paths con@(Connection start end) =
+        case M.lookup (start, end) paths of
+            Nothing   -> return ()
+            Just path -> writePath h con path
+
+dijkstraMany :: AdjacencyMap -> Vertex -> S.Set Vertex -> M.Map Vertex Path
+dijkstraMany adj start targets = go (PQ.singleton (start, 0, [start], 0)) S.empty targets M.empty 1
+  where
+    -- queue entries: (current vertex, path cost, reversed path, insertion serial)
+    go queue visited remaining paths nextSerial = next (PQ.minViewBy compareCost queue) visited remaining paths nextSerial
+    next Nothing _ _ paths _ = paths
+    next (Just ((curPos, curCost, curPath, _), queue)) visited remaining paths nextSerial
+      | curPos `S.member` visited = go queue visited remaining paths nextSerial
+      | otherwise =
+          let visited' = S.insert curPos visited
+              isRequested = curPos `S.member` remaining
+              remaining' = if isRequested then S.delete curPos remaining else remaining
+              paths' = if isRequested then M.insert curPos (Path (reverse curPath) curCost) paths else paths
+          in if S.null remaining'
+             then paths'
+             else
+                 let neighbors = getNeighborsWithCost adj curPos
+                     (updatedQueue, updatedSerial) = foldl (update visited' curCost curPath) (queue, nextSerial) neighbors
+                 in go updatedQueue visited' remaining' paths' updatedSerial
+    update visited curCost curPath (accQueue, serial) (neighborVertex, edgeWeight)
+      | neighborVertex `S.member` visited = (accQueue, serial)
+      | otherwise = (PQ.insertBy compareCost newEntry accQueue, serial + 1)
+          where
+            newEntry =
+                ( neighborVertex
+                , curCost + edgeWeight
+                , neighborVertex:curPath
+                , serial
+                )
+    compareCost (_, cost1, _, serial1) (_, cost2, _, serial2) =
+        cost1 < cost2 || (cost1 == cost2 && serial1 < serial2)
+
+pathsForConnectionsSequential :: Handle -> AdjacencyMap -> [Connection] -> OmissionStrategy ->
+                                 S.Set Vertex -> CongestionStrategy -> IO ()
+pathsForConnectionsSequential h adj cons omissionStrategy dests congestionStrategy =
     foldM_ routeConnection M.empty cons
       where
         routeConnection :: EdgeUsage -> Connection -> IO EdgeUsage
         routeConnection usage con = do
+            putStr $ "Searching for " ++ show con
             print con
             hFlush stdout
             case pathForConnection adj omissionStrategy dests congestionStrategy usage con of
