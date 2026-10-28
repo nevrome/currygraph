@@ -6,11 +6,9 @@ import qualified PQueue as PQ
 
 import System.IO
 import Data.List
-import Data.Maybe (fromJust, catMaybes)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Control.Monad (foldM_)
-import Data.Functor.Const
 
 data LCPOptions = LCPOptions {
       lcpVertFile :: String
@@ -106,36 +104,7 @@ pathsForConnectionsMany h adj cons = do
             Just path -> writePath h con path
 
 dijkstraMany :: AdjacencyMap -> Vertex -> S.Set Vertex -> M.Map Vertex Path
-dijkstraMany adj start targets = go (PQ.singleton (start, 0, [start], 0)) S.empty targets M.empty 1
-  where
-    -- queue entries: (current vertex, path cost, reversed path, insertion serial)
-    go queue visited remaining paths nextSerial = next (PQ.minViewBy compareCost queue) visited remaining paths nextSerial
-    next Nothing _ _ paths _ = paths
-    next (Just ((curPos, curCost, curPath, _), queue)) visited remaining paths nextSerial
-      | curPos `S.member` visited = go queue visited remaining paths nextSerial
-      | otherwise =
-          let visited' = S.insert curPos visited
-              isRequested = curPos `S.member` remaining
-              remaining' = if isRequested then S.delete curPos remaining else remaining
-              paths' = if isRequested then M.insert curPos (Path (reverse curPath) curCost) paths else paths
-          in if S.null remaining'
-             then paths'
-             else
-                 let neighbors = getNeighborsWithCost adj curPos
-                     (updatedQueue, updatedSerial) = foldl (update visited' curCost curPath) (queue, nextSerial) neighbors
-                 in go updatedQueue visited' remaining' paths' updatedSerial
-    update visited curCost curPath (accQueue, serial) (neighborVertex, edgeWeight)
-      | neighborVertex `S.member` visited = (accQueue, serial)
-      | otherwise = (PQ.insertBy compareCost newEntry accQueue, serial + 1)
-          where
-            newEntry =
-                ( neighborVertex
-                , curCost + edgeWeight
-                , neighborVertex:curPath
-                , serial
-                )
-    compareCost (_, cost1, _, serial1) (_, cost2, _, serial2) =
-        cost1 < cost2 || (cost1 == cost2 && serial1 < serial2)
+dijkstraMany adj start targets = shortestPaths adj start targets (\_ _ edgeCost -> Just edgeCost)
 
 pathsForConnectionsSequential :: Handle -> AdjacencyMap -> [Connection] -> OmissionStrategy ->
                                  S.Set Vertex -> CongestionStrategy -> IO ()
@@ -144,68 +113,94 @@ pathsForConnectionsSequential h adj cons omissionStrategy dests congestionStrate
       where
         routeConnection :: EdgeUsage -> Connection -> IO EdgeUsage
         routeConnection usage con = do
-            putStr $ "Searching for " ++ show con
-            print con
+            putStrLn $ "Searching for " ++ show con
             hFlush stdout
-            case pathForConnection adj omissionStrategy dests congestionStrategy usage con of
+            case pathForOneConnection adj omissionStrategy dests congestionStrategy usage con of
                 Nothing -> pure usage
                 Just path -> do
                     writePath h con path
                     pure $ addPath usage path
 
-pathForConnection :: AdjacencyMap
+pathForOneConnection :: AdjacencyMap
                      -> OmissionStrategy -> S.Set Vertex -> CongestionStrategy -> EdgeUsage
                      -> Connection -> Maybe Path
-pathForConnection adj omissionStrategy dests congestionStrategy usage con@(Connection start end) =
+pathForOneConnection adj omissionStrategy dests congestionStrategy usage con@(Connection start end) =
     case omissionStrategy of
-        OmitNone  -> dijkstraCongested adj con omitNothing congestionStrategy usage
+        OmitNone  -> dijkstraCongested adj con (const False) congestionStrategy usage
         OmitDests -> dijkstraCongested adj con isOmitted congestionStrategy usage
-        Filter    -> dijkstraCongested adj con omitNothing congestionStrategy usage >>= rejectInHindsight
+        Filter    -> dijkstraCongested adj con (const False) congestionStrategy usage >>= rejectInHindsight
   where
     rejectInHindsight path@(Path vs _)
         | any isOmitted vs = Nothing
         | otherwise        = Just path
     isOmitted v = v /= start && v /= end && v `S.member` dests
-    omitNothing _ = False
 
-dijkstraCongested :: AdjacencyMap -> Connection -> (Vertex -> Bool) -> CongestionStrategy -> EdgeUsage -> Maybe Path
-dijkstraCongested adj (Connection start end) isOmitted congestionStrategy usage =
-    go (PQ.singleton (start, 0, 0, [start], 0)) S.empty 1
+dijkstraCongested :: AdjacencyMap -> Connection -> (Vertex -> Bool) -> CongestionStrategy
+                     -> EdgeUsage -> Maybe Path
+dijkstraCongested adj (Connection start end) isOmitted strategy usage =
+    M.lookup end $ shortestPaths adj start (S.singleton end) routeIncrement
   where
-    -- queue entries: (current vertex, routing cost including congestion, real path cost, path, insertion serial)
-    go queue visited nextSerial = next (PQ.minViewBy compareRouteCost queue) visited nextSerial
-    next Nothing _ _ = Nothing
-    next (Just ((curPos, routeCost, realCost, curPath, _), queue)) visited nextSerial
-      -- return the real graph cost, not the penalty-inflated cost
-      | curPos == end = Just $ Path (reverse curPath) realCost
-      | curPos `S.member` visited = go queue visited nextSerial
-      | otherwise =
-          let neighbors = getNeighborsWithCost adj curPos
-              (updatedQueue, updatedSerial) = foldl update (queue, nextSerial) neighbors
-          in go updatedQueue (S.insert curPos visited) updatedSerial
-      where
-        update (accQueue, serial) (neighborVertex, edgeWeight)
-          | isOmitted neighborVertex = (accQueue, serial)
-          | neighborVertex `S.member` visited = (accQueue, serial)
-          | otherwise = (PQ.insertBy compareRouteCost newEntry accQueue, serial + 1)
-          where
-            newEntry =
-                ( neighborVertex
-                , routeCost + edgeWeight + congestionPenalty congestionStrategy usage curPos neighborVertex
-                , realCost + edgeWeight
-                , neighborVertex : curPath
-                , serial
-                )
-    -- the serial preserves the input order and acts as a tie breaker
-    -- it is not technically necessary, but it makes the output more predictable (at the cost of some performance)
-    compareRouteCost (_, cost1, _, _, serial1) (_, cost2, _, _, serial2) =
-        cost1 < cost2 || (cost1 == cost2 && serial1 < serial2)
+    routeIncrement from to edgeCost
+        | isOmitted to = Nothing
+        | otherwise    = Just $ edgeCost + congestionPenalty strategy usage from to
 
 congestionPenalty :: CongestionStrategy -> EdgeUsage -> Vertex -> Vertex -> Float
 congestionPenalty IgnoreCongestion _ _ _ = 0
 congestionPenalty (PenalizeUsedEdges penaltyPerUse) usage v1 v2 =
     let previousUses = M.findWithDefault 0 (edgeKey v1 v2) usage
     in penaltyPerUse * fromIntegral previousUses
+
+-- actual path search
+type Cost = Float
+type RouteIncrement = Vertex -> Vertex -> Cost -> Maybe Cost
+     -- vertex, routing cost, real cost, reversed path, insertion serial
+data Candidate = Candidate Vertex Cost Cost [Vertex] Int
+
+shortestPaths
+    :: AdjacencyMap
+    -> Vertex
+    -> S.Set Vertex
+    -> RouteIncrement
+    -> M.Map Vertex Path
+shortestPaths adj start targets routeIncrement =
+    go initialQueue S.empty targets M.empty 1
+  where
+    initialQueue = PQ.singleton (Candidate start 0 0 [start] 0)
+    go queue visited remaining paths nextSerial =
+        case PQ.minViewBy compareCost queue of
+            Nothing -> paths
+            Just (candidate@(Candidate current _ realCost revPath _), queue')
+                | current `S.member` visited -> go queue' visited remaining paths nextSerial
+                | otherwise ->
+                    let visited'= S.insert current visited
+                        paths'  = if current `S.member` remaining
+                                  then M.insert current (Path (reverse revPath) realCost) paths
+                                  else paths
+                        remaining' = S.delete current remaining
+                    in if S.null remaining'
+                       then paths'
+                       else
+                           let (queue'', nextSerial') =
+                                   foldl
+                                       (enqueue candidate visited')
+                                       (queue', nextSerial)
+                                       (getNeighborsWithCost adj current)
+                            in go queue'' visited' remaining' paths' nextSerial'
+    enqueue :: Candidate -> S.Set Vertex -> (PQ.PQueue Candidate, Int) -> (Vertex, Float) -> (PQ.PQueue Candidate, Int)
+    enqueue
+        (Candidate current routeCost realCost revPath _)
+        visited
+        (queue, serial)
+        (neighbor, edgeCost)
+        | neighbor `S.member` visited = (queue, serial)
+        | otherwise =
+            case routeIncrement current neighbor edgeCost of
+                Nothing -> (queue, serial)
+                Just extraCost ->
+                    let c = Candidate neighbor (routeCost + extraCost) (realCost + edgeCost) (neighbor:revPath) serial
+                    in (PQ.insertBy compareCost c queue, serial + 1)
+    compareCost (Candidate _ cost1 _ _ serial1) (Candidate _ cost2 _ _ serial2) =
+        cost1 < cost2 || (cost1 == cost2 && serial1 < serial2)
 
 writePath :: Handle -> Connection -> Path -> IO ()
 writePath h (Connection v1 v2) (Path vs cost) =
