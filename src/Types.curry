@@ -15,7 +15,9 @@ buildVertexMap vertices = M.fromList $ map (\v@(Vertex i _) -> (i, v)) vertices
 findVertexUnsafe :: VertexMap -> Int -> Vertex
 findVertexUnsafe vm voi = fromJust $ M.lookup voi vm
 
-type AdjacencyMap = M.Map Vertex [(Vertex, Float)] -- (neighboring vertex, float)
+type Cost = Float
+
+type AdjacencyMap = M.Map Vertex [(Vertex, Cost)] -- (neighboring vertex, cost)
 
 buildAdjacencyMap :: [Edge] -> AdjacencyMap
 buildAdjacencyMap es = foldl addEdge M.empty es
@@ -40,7 +42,7 @@ getNeighbors adj v = map fst $ M.findWithDefault [] v adj
 getNeighborsWithCost :: AdjacencyMap -> Vertex -> [(Vertex,Float)]
 getNeighborsWithCost adj v = M.findWithDefault [] v adj
 
-data Path = Path [Vertex] Float -- [v1, v2, v3, ...] total cost
+data Path = Path [Vertex] Cost -- [v1, v2, v3, ...] total cost
     deriving (Show, Eq)
 makePath :: [Vertex] -> String -> Path
 makePath vs cost = Path vs (read cost)
@@ -55,7 +57,7 @@ isEdgeInPath (Path vs _) (Edge v1 v2 _) =
         (from == v1 && to == v2) ||
         (from == v2 && to == v1)
 
-data Edge = Edge Vertex Vertex Float -- v1 v2 cost
+data Edge = Edge Vertex Vertex Cost -- v1 v2 cost
     deriving (Show, Eq)
 makeEdge :: Vertex -> Vertex -> String -> Edge
 makeEdge v1 v2 cost = Edge v1 v2 (read cost)

@@ -8,8 +8,8 @@ import Draw
 
 import Data.List
 import Data.Maybe
-import OptParse ((<.>))
 import qualified OptParse as OP
+import OptParse ((<.>))
 import System.Environment
 import Data.Global
 import System.IO
@@ -85,7 +85,7 @@ drawFlag = flagFor Draw drawOpts
 lcpOpts :: Options -> LCPOptions
 lcpOpts s = case com s of
   LCP opts -> opts
-  _        -> LCPOptions "" "" "" OmitNone Nothing IgnoreCongestion ""
+  _        -> LCPOptions "" "" "" OmitNone Nothing IgnoreCongestion Nothing ""
 bfsOpts :: Options -> BFSOptions
 bfsOpts s = case com s of
   BFS opts -> opts
@@ -209,6 +209,12 @@ readPenalizeCongestion s =
       0.0 -> IgnoreCongestion
       f   -> PenalizeUsedEdges f
 
+docMaxCost :: OP.Mod
+docMaxCost = OP.long "maxCost"
+            OP.<> OP.metavar "FLOAT"
+            OP.<> OP.help "Default: Nothing."
+parseMaxCost = lcpOption (\s o -> o { lcpMaxCost = Just (read s) }) docMaxCost
+
 docNrMinDests :: OP.Mod
 docNrMinDests = OP.long "minDests"
             OP.<> OP.metavar "INT"
@@ -240,6 +246,7 @@ cmdParser = OP.optParser $
             <.> parseOmissionStrategy
             <.> parseDestFileLCP
             <.> parsePenalizeCongestion
+            <.> parseMaxCost
             <.> parseOutFileLCP
         ) OP.<|>
         OP.command "bfs" (OP.help "Breadth-first search for the k-nearest neighbors on a graph \

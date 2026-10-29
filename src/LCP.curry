@@ -17,13 +17,13 @@ data LCPOptions = LCPOptions {
     , lcpOmissionStrategy :: OmissionStrategy
     , lcpDestFile :: Maybe String
     , lcpCongestionStrategy :: CongestionStrategy
+    , lcpMaxCost :: Maybe Cost
     , lcpOutFile :: String
 }
 
 data OmissionStrategy = OmitNone | OmitDests | Filter
 
--- number of paths which have already used an edge
-data CongestionStrategy = IgnoreCongestion | PenalizeUsedEdges Float
+data CongestionStrategy = IgnoreCongestion | PenalizeUsedEdges Cost
 
 type EdgeUsage = M.Map (Vertex, Vertex) Int
 addPath :: EdgeUsage -> Path -> EdgeUsage
@@ -36,12 +36,11 @@ edgeKey v1 v2
     | v1 <= v2  = (v1, v2)
     | otherwise = (v2, v1)
 
-
 runLCP :: LCPOptions -> IO ()
 runLCP (
     LCPOptions
     vertFile edgeFile connectionFile
-    omissionStrategy maybeDestFile congestionStrategy
+    omissionStrategy maybeDestFile congestionStrategy maxCost
     outFile
     ) = do
     putStrLn "Reading data..."
@@ -65,20 +64,20 @@ runLCP (
     putStrLn "Searching..."
     h <- openFile outFile WriteMode
     hPutStrLn h "v1,v2,sum_cost,path" -- csv header
-    pathsForConnections h adj connections omissionStrategy dests congestionStrategy
+    pathsForConnections h adj connections omissionStrategy dests congestionStrategy maxCost
     hFlush h
     hClose h
     putStrLn "Done"
 
 pathsForConnections :: Handle -> AdjacencyMap -> [Connection] -> OmissionStrategy ->
-                       S.Set Vertex -> CongestionStrategy -> IO ()
-pathsForConnections h adj cons omissionStrategy dests congestionStrategy =
+                       S.Set Vertex -> CongestionStrategy -> Maybe Cost -> IO ()
+pathsForConnections h adj cons omissionStrategy dests congestionStrategy maxCost =
     case (omissionStrategy, congestionStrategy) of
-        (OmitNone, IgnoreCongestion) -> pathsForConnectionsMany h adj cons
-        _ -> pathsForConnectionsSequential h adj cons omissionStrategy dests congestionStrategy
+        (OmitNone, IgnoreCongestion) -> pathsForConnectionsMany h adj cons maxCost
+        _ -> pathsForConnectionsSequential h adj cons omissionStrategy dests congestionStrategy maxCost
 
-pathsForConnectionsMany :: Handle -> AdjacencyMap -> [Connection] -> IO ()
-pathsForConnectionsMany h adj cons = do
+pathsForConnectionsMany :: Handle -> AdjacencyMap -> [Connection] -> Maybe Cost -> IO ()
+pathsForConnectionsMany h adj cons maxCost = do
     let sourceGroups = M.toList groupedConnections
     allPaths <- searchSources (length sourceGroups) 1 M.empty sourceGroups
     mapM_ (writeConnection allPaths) cons
@@ -90,7 +89,7 @@ pathsForConnectionsMany h adj cons = do
     searchSources total current paths ((start, targets):remainingGroups) = do
         putStr $ "Searching from vertex " ++ show start ++ " (" ++ show current ++ "/" ++ show total ++ ", " ++ show (S.size targets) ++ " destinations)"
         hFlush stdout
-        let sourcePaths = dijkstraMany adj start targets
+        let sourcePaths = dijkstraMany adj start targets maxCost
         -- M.size forces the result sufficiently for the completion message to be printed
         putStrLn $ ": " ++ show (M.size sourcePaths) ++ " paths found"
         hFlush stdout
@@ -103,55 +102,55 @@ pathsForConnectionsMany h adj cons = do
             Nothing   -> return ()
             Just path -> writePath h con path
 
-dijkstraMany :: AdjacencyMap -> Vertex -> S.Set Vertex -> M.Map Vertex Path
-dijkstraMany adj start targets = shortestPaths adj start targets (\_ _ edgeCost -> Just edgeCost)
+dijkstraMany :: AdjacencyMap -> Vertex -> S.Set Vertex -> Maybe Cost -> M.Map Vertex Path
+dijkstraMany adj start targets maxCost =
+    shortestPaths adj start targets (\_ _ edgeCost -> Just edgeCost) maxCost
 
 pathsForConnectionsSequential :: Handle -> AdjacencyMap -> [Connection] -> OmissionStrategy ->
-                                 S.Set Vertex -> CongestionStrategy -> IO ()
-pathsForConnectionsSequential h adj cons omissionStrategy dests congestionStrategy =
+                                 S.Set Vertex -> CongestionStrategy -> Maybe Cost -> IO ()
+pathsForConnectionsSequential h adj cons omissionStrategy dests congestionStrategy maxCost =
     foldM_ routeConnection M.empty cons
       where
         routeConnection :: EdgeUsage -> Connection -> IO EdgeUsage
         routeConnection usage con = do
             putStrLn $ "Searching for " ++ show con
             hFlush stdout
-            case pathForOneConnection adj omissionStrategy dests congestionStrategy usage con of
+            case pathForOneConnection adj omissionStrategy dests congestionStrategy maxCost usage con of
                 Nothing -> pure usage
                 Just path -> do
                     writePath h con path
                     pure $ addPath usage path
 
 pathForOneConnection :: AdjacencyMap
-                     -> OmissionStrategy -> S.Set Vertex -> CongestionStrategy -> EdgeUsage
-                     -> Connection -> Maybe Path
-pathForOneConnection adj omissionStrategy dests congestionStrategy usage con@(Connection start end) =
+                     -> OmissionStrategy -> S.Set Vertex -> CongestionStrategy -> Maybe Cost
+                     -> EdgeUsage -> Connection  -> Maybe Path
+pathForOneConnection adj omissionStrategy dests congestionStrategy maxCost usage con@(Connection start end) =
     case omissionStrategy of
-        OmitNone  -> dijkstraCongested adj con (const False) congestionStrategy usage
-        OmitDests -> dijkstraCongested adj con isOmitted congestionStrategy usage
-        Filter    -> dijkstraCongested adj con (const False) congestionStrategy usage >>= rejectInHindsight
+        OmitNone  -> dijkstraCongested adj con (const False) congestionStrategy maxCost usage
+        OmitDests -> dijkstraCongested adj con isOmitted congestionStrategy maxCost usage
+        Filter    -> dijkstraCongested adj con (const False) congestionStrategy maxCost usage >>= rejectInHindsight
   where
     rejectInHindsight path@(Path vs _)
         | any isOmitted vs = Nothing
         | otherwise        = Just path
     isOmitted v = v /= start && v /= end && v `S.member` dests
 
-dijkstraCongested :: AdjacencyMap -> Connection -> (Vertex -> Bool) -> CongestionStrategy
+dijkstraCongested :: AdjacencyMap -> Connection -> (Vertex -> Bool) -> CongestionStrategy -> Maybe Cost
                      -> EdgeUsage -> Maybe Path
-dijkstraCongested adj (Connection start end) isOmitted strategy usage =
-    M.lookup end $ shortestPaths adj start (S.singleton end) routeIncrement
+dijkstraCongested adj (Connection start end) isOmitted strategy maxCost usage =
+    M.lookup end $ shortestPaths adj start (S.singleton end) routeIncrement maxCost
   where
     routeIncrement from to edgeCost
         | isOmitted to = Nothing
         | otherwise    = Just $ edgeCost + congestionPenalty strategy usage from to
 
-congestionPenalty :: CongestionStrategy -> EdgeUsage -> Vertex -> Vertex -> Float
+congestionPenalty :: CongestionStrategy -> EdgeUsage -> Vertex -> Vertex -> Cost
 congestionPenalty IgnoreCongestion _ _ _ = 0
 congestionPenalty (PenalizeUsedEdges penaltyPerUse) usage v1 v2 =
     let previousUses = M.findWithDefault 0 (edgeKey v1 v2) usage
     in penaltyPerUse * fromIntegral previousUses
 
 -- actual path search
-type Cost = Float
 type RouteIncrement = Vertex -> Vertex -> Cost -> Maybe Cost
      -- vertex, routing cost, real cost, reversed path, insertion serial
 data Candidate = Candidate Vertex Cost Cost [Vertex] Int
@@ -161,8 +160,9 @@ shortestPaths
     -> Vertex
     -> S.Set Vertex
     -> RouteIncrement
+    -> Maybe Cost
     -> M.Map Vertex Path
-shortestPaths adj start targets routeIncrement =
+shortestPaths adj start targets routeIncrement maxRealCost =
     go initialQueue S.empty targets M.empty 1
   where
     initialQueue = PQ.singleton (Candidate start 0 0 [start] 0)
@@ -186,21 +186,26 @@ shortestPaths adj start targets routeIncrement =
                                        (queue', nextSerial)
                                        (getNeighborsWithCost adj current)
                             in go queue'' visited' remaining' paths' nextSerial'
-    enqueue :: Candidate -> S.Set Vertex -> (PQ.PQueue Candidate, Int) -> (Vertex, Float) -> (PQ.PQueue Candidate, Int)
+    enqueue :: Candidate -> S.Set Vertex -> (PQ.PQueue Candidate, Int) -> (Vertex, Cost) -> (PQ.PQueue Candidate, Int)
     enqueue
         (Candidate current routeCost realCost revPath _)
         visited
-        (queue, serial)
+        state@(queue, serial)
         (neighbor, edgeCost)
-        | neighbor `S.member` visited = (queue, serial)
+        | neighbor `S.member` visited = state
+        | not (withinBudget (realCost + edgeCost)) = state
         | otherwise =
             case routeIncrement current neighbor edgeCost of
-                Nothing -> (queue, serial)
+                Nothing -> state
                 Just extraCost ->
                     let c = Candidate neighbor (routeCost + extraCost) (realCost + edgeCost) (neighbor:revPath) serial
                     in (PQ.insertBy compareCost c queue, serial + 1)
     compareCost (Candidate _ cost1 _ _ serial1) (Candidate _ cost2 _ _ serial2) =
         cost1 < cost2 || (cost1 == cost2 && serial1 < serial2)
+    withinBudget cost =
+        case maxRealCost of
+            Nothing    -> True
+            Just limit -> cost <= limit
 
 writePath :: Handle -> Connection -> Path -> IO ()
 writePath h (Connection v1 v2) (Path vs cost) =
